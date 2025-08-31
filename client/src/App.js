@@ -13,6 +13,27 @@ function App() {
   const [roomData, setRoomData] = useState(null);
   const [username, setUsername] = useState("");
   const [sharedRoomCode, setSharedRoomCode] = useState(null);
+  const [joinError, setJoinError] = useState("");
+
+  // Socket event handlers
+  useEffect(() => {
+    socket.on("room-joined", (data) => {
+      setCurrentPage("room");
+      setJoinError(""); // Clear any previous errors
+    });
+
+    socket.on("error", (data) => {
+      // Handle join room errors by staying on landing page
+      console.error("Socket error:", data.message);
+      setJoinError(data.message);
+      setCurrentPage("landing");
+    });
+
+    return () => {
+      socket.off("room-joined");
+      socket.off("error");
+    };
+  }, []);
 
   // Check for shared room link on app load
   useEffect(() => {
@@ -29,7 +50,7 @@ function App() {
   const joinRoom = (roomCode, user) => {
     setUsername(user);
     setRoomData({ roomCode });
-    setCurrentPage("room");
+    // Don't switch pages immediately - wait for room-joined confirmation
     socket.emit("join-room", { roomCode, username: user });
   };
 
@@ -92,6 +113,7 @@ function App() {
           onCreateRoom={createRoom}
           onJoinRoom={joinRoom}
           sharedRoomCode={sharedRoomCode}
+          joinError={joinError}
         />
       )}
       {currentPage === "room" && (

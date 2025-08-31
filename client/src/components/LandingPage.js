@@ -1,11 +1,19 @@
 import React, { useState, useEffect } from "react";
 
-const LandingPage = ({ onCreateRoom, onJoinRoom, sharedRoomCode }) => {
+const LandingPage = ({ onCreateRoom, onJoinRoom, sharedRoomCode, joinError }) => {
   const [username, setUsername] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [error, setError] = useState("");
   const [isJoining, setIsJoining] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+
+  // Handle join errors from parent component
+  useEffect(() => {
+    if (joinError) {
+      setError(joinError);
+      setIsJoining(false); // Reset joining state
+    }
+  }, [joinError]);
 
   // Pre-fill room code if coming from shared link
   useEffect(() => {
@@ -52,21 +60,8 @@ const LandingPage = ({ onCreateRoom, onJoinRoom, sharedRoomCode }) => {
     setError("");
     setIsJoining(true);
 
-    try {
-      // Validate room exists
-      const serverUrl = "https://watch-together-server-production-d25a.up.railway.app";
-      const response = await fetch(
-        `${serverUrl}/api/room/${roomCode.toUpperCase()}`
-      );
-      if (!response.ok) {
-        throw new Error("Room not found");
-      }
-
-      onJoinRoom(roomCode.toUpperCase(), username.trim());
-    } catch (err) {
-      setError("Room not found or is full");
-      setIsJoining(false);
-    }
+    // Let Socket.IO handle room validation - no need for API pre-check
+    onJoinRoom(roomCode.toUpperCase(), username.trim());
   };
 
   return (

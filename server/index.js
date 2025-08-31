@@ -7,16 +7,20 @@ const { v4: uuidv4 } = require("uuid");
 const app = express();
 const server = http.createServer(app);
 
+const allowedOrigins = process.env.NODE_ENV === 'production' 
+  ? ["https://your-app-name.vercel.app"] 
+  : ["http://localhost:3000", "http://localhost:3001"];
+
 const io = socketIo(server, {
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:3001"],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
   },
 });
 
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://localhost:3001"],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true,
   })

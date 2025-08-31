@@ -4,7 +4,7 @@
   "description": "Real-time YouTube sync platform with chat",
   "main": "index.js",
   "engines": {
-    "node": "18.x"
+    "node": ">=18.x"
   },
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",

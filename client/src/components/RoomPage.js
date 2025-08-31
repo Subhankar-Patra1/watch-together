@@ -209,8 +209,8 @@ const RoomPage = ({ socket, roomCode, username, onLeaveRoom }) => {
       // Use native share API if available (mobile devices)
       try {
         await navigator.share({
-          title: "Join my WatchTogether room!",
-          text: `Join me to watch videos together in room ${roomCode}`,
+          title: "Watch Together - Join my video room!",
+          text: `🎬 Join me to watch videos together! Room: ${roomCode}`,
           url: shareUrl,
         });
       } catch (err) {

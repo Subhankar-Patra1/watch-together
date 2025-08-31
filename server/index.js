@@ -9,7 +9,17 @@ const server = http.createServer(app);
 
 const allowedOrigins =
   process.env.NODE_ENV === "production"
-    ? ["https://watch-videos-together.vercel.app"]
+    ? function (origin, callback) {
+        // Allow requests with no origin (mobile apps, etc.)
+        if (!origin) return callback(null, true);
+        
+        // Allow all localhost and vercel.app domains
+        if (origin.includes('localhost') || origin.includes('.vercel.app')) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      }
     : ["http://localhost:3000", "http://localhost:3001"];
 
 const io = socketIo(server, {

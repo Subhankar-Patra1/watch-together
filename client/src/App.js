@@ -34,19 +34,28 @@ function App() {
 
   const createRoom = async (user) => {
     try {
+      console.log("Attempting to create room...");
+      console.log("Server URL:", serverUrl);
+      
       const response = await fetch(`${serverUrl}/api/create-room`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
 
+      console.log("Response status:", response.status);
+      console.log("Response OK:", response.ok);
+
       if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
+        const errorText = await response.text();
+        console.error("Server error response:", errorText);
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log("Server response data:", data);
 
       if (!data.roomCode) {
-        throw new Error("Invalid response from server");
+        throw new Error("Invalid response from server - no room code");
       }
 
       joinRoom(data.roomCode, user);

@@ -4,7 +4,10 @@ import LandingPage from "./components/LandingPage";
 import RoomPage from "./components/RoomPage";
 import "./App.css";
 
-const serverUrl = process.env.REACT_APP_SERVER_URL || "http://localhost:5000";
+const serverUrl =
+  process.env.REACT_APP_SERVER_URL ||
+  "https://watch-together-server-production-d25a.up.railway.app";
+console.log("🚀 Using server URL:", serverUrl);
 const socket = io(serverUrl);
 
 function App() {
@@ -37,15 +40,21 @@ function App() {
       console.log("=== DEBUG INFO ===");
       console.log("Server URL:", serverUrl);
       console.log("Environment:", process.env.NODE_ENV);
-      console.log("All env vars:", Object.keys(process.env).filter(key => key.startsWith('REACT_APP')));
-      
+      console.log(
+        "All env vars:",
+        Object.keys(process.env).filter((key) => key.startsWith("REACT_APP"))
+      );
+
       const response = await fetch(`${serverUrl}/api/create-room`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
 
       console.log("Response status:", response.status);
-      console.log("Response headers:", Object.fromEntries(response.headers.entries()));
+      console.log(
+        "Response headers:",
+        Object.fromEntries(response.headers.entries())
+      );
 
       if (!response.ok) {
         const errorText = await response.text();

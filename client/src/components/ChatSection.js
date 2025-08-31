@@ -102,11 +102,13 @@ const ChatSection = React.memo(({
             {users.map(user => (
               <span 
                 key={user.id} 
-                className="user-item"
+                className={`user-item ${user.isHost ? 'host-item' : ''}`}
                 style={{ color: user.color }}
               >
+                {user.isHost && '👑 '}
                 {user.username}
                 {user.username === currentUsername && ' (You)'}
+                {user.isHost && ' (Host)'}
               </span>
             ))}
           </div>

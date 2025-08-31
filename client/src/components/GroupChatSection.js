@@ -107,9 +107,11 @@ const GroupChatSection = ({
         <div className="chat-content">
           <div className="users-list-compact">
             {users.map((user) => (
-              <div key={user.id} className="user-badge">
+              <div key={user.id} className={`user-badge ${user.isHost ? 'host-badge' : ''}`}>
                 <span className="user-name" style={{ color: user.color }}>
+                  {user.isHost && '👑 '}
                   {user.username === currentUsername ? "You" : user.username}
+                  {user.isHost && ' (Host)'}
                 </span>
               </div>
             ))}

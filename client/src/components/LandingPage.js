@@ -54,8 +54,9 @@ const LandingPage = ({ onCreateRoom, onJoinRoom, sharedRoomCode }) => {
 
     try {
       // Validate room exists
+      const serverUrl = "https://watch-together-server-production-d25a.up.railway.app";
       const response = await fetch(
-        `http://localhost:5000/api/room/${roomCode.toUpperCase()}`
+        `${serverUrl}/api/room/${roomCode.toUpperCase()}`
       );
       if (!response.ok) {
         throw new Error("Room not found");

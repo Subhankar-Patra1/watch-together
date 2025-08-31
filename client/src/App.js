@@ -21,6 +21,7 @@ function App() {
   useEffect(() => {
     socket.on("room-joined", (data) => {
       console.log("✅ Frontend: Successfully joined room:", data);
+      setRoomData(data); // Store the room data
       setCurrentPage("room");
       setJoinError(""); // Clear any previous errors
     });
@@ -133,13 +134,25 @@ function App() {
           joinError={joinError}
         />
       )}
-      {currentPage === "room" && (
+      {currentPage === "room" && roomData && (
         <RoomPage
           socket={socket}
           roomCode={roomData.roomCode}
           username={username}
           onLeaveRoom={leaveRoom}
         />
+      )}
+      {currentPage === "room" && !roomData && (
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          height: '100vh',
+          fontSize: '18px',
+          color: '#666'
+        }}>
+          Loading room...
+        </div>
       )}
     </div>
   );

@@ -17,11 +17,11 @@ const extractVideoId = (url) => {
   return match ? match[1] : null;
 };
 
-const RoomPage = ({ socket, roomCode, username, onLeaveRoom }) => {
+const RoomPage = ({ socket, roomCode, username, isHost: initialIsHost, onLeaveRoom }) => {
   const [users, setUsers] = useState([]);
   const [messages, setMessages] = useState([]);
   const [video, setVideo] = useState(null);
-  const [isHost, setIsHost] = useState(false);
+  const [isHost, setIsHost] = useState(initialIsHost || false);
   const [error, setError] = useState("");
   const [typingUsers, setTypingUsers] = useState([]);
   const [copySuccess, setCopySuccess] = useState("");
@@ -29,6 +29,15 @@ const RoomPage = ({ socket, roomCode, username, onLeaveRoom }) => {
   const [selectedNewHost, setSelectedNewHost] = useState("");
   const [activeRightSection, setActiveRightSection] = useState("chat"); // 'chat' or 'video'
   const playerRef = useRef(null);
+
+  // Sync initial host status from prop
+  useEffect(() => {
+    console.log("🔍 RoomPage: Initial host status prop:", initialIsHost);
+    if (initialIsHost !== undefined) {
+      setIsHost(initialIsHost);
+      console.log("🔍 RoomPage: Set isHost to:", initialIsHost);
+    }
+  }, [initialIsHost]);
 
   useEffect(() => {
     // Socket event listeners
@@ -347,6 +356,7 @@ const RoomPage = ({ socket, roomCode, username, onLeaveRoom }) => {
               </div>
               <div className="room-status-row">
                 <p className="room-status">
+                  {console.log("🔍 RoomPage: Rendering status with isHost:", isHost)}
                   {isHost
                     ? "👑 You are the host - You control the video and room settings"
                     : `👥 Member - The host controls the video`}

@@ -482,14 +482,22 @@ body {
 }
 
 .user-item.host-item {
-  background: linear-gradient(135deg, rgba(255, 215, 0, 0.25), rgba(255, 165, 0, 0.2));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 215, 0, 0.25),
+    rgba(255, 165, 0, 0.2)
+  );
   border: 1px solid rgba(255, 215, 0, 0.4);
   box-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
   font-weight: 700;
 }
 
 .user-item.host-item:hover {
-  background: linear-gradient(135deg, rgba(255, 215, 0, 0.35), rgba(255, 165, 0, 0.3));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 215, 0, 0.35),
+    rgba(255, 165, 0, 0.3)
+  );
   box-shadow: 0 2px 16px rgba(255, 215, 0, 0.4);
 }
 
@@ -1421,7 +1429,11 @@ ctions Layout */
 }
 
 .user-badge.host-badge {
-  background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 165, 0, 0.15));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 215, 0, 0.2),
+    rgba(255, 165, 0, 0.15)
+  );
   border: 1px solid rgba(255, 215, 0, 0.3);
   box-shadow: 0 0 8px rgba(255, 215, 0, 0.2);
 }

@@ -272,9 +272,9 @@ io.on("connection", (socket) => {
     // Send room state to new user
     socket.emit("room-joined", {
       roomCode,
-      users: room.users.map(user => ({
+      users: room.users.map((user) => ({
         ...user,
-        isHost: user.id === room.host
+        isHost: user.id === room.host,
       })),
       video: room.video,
       videoState: room.videoState,
@@ -305,11 +305,11 @@ io.on("connection", (socket) => {
     socket.to(roomCode).emit("user-joined", { user });
 
     // Send updated user list to ALL users in the room (including the new user)
-    io.to(roomCode).emit("users-updated", { 
-      users: room.users.map(user => ({
+    io.to(roomCode).emit("users-updated", {
+      users: room.users.map((user) => ({
         ...user,
-        isHost: user.id === room.host
-      }))
+        isHost: user.id === room.host,
+      })),
     });
   });
 
@@ -535,11 +535,11 @@ io.on("connection", (socket) => {
           });
 
           // Send updated user list to ALL remaining users in the room
-          io.to(roomCode).emit("users-updated", { 
-            users: room.users.map(user => ({
+          io.to(roomCode).emit("users-updated", {
+            users: room.users.map((user) => ({
               ...user,
-              isHost: user.id === room.host
-            }))
+              isHost: user.id === room.host,
+            })),
           });
         }
       }

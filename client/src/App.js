@@ -139,6 +139,7 @@ function App() {
           socket={socket}
           roomCode={roomData.roomCode}
           username={username}
+          isHost={roomData.isHost}
           onLeaveRoom={leaveRoom}
         />
       )}

@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from "react";
 
-const LandingPage = ({ onCreateRoom, onJoinRoom, sharedRoomCode, joinError }) => {
+const LandingPage = ({
+  onCreateRoom,
+  onJoinRoom,
+  sharedRoomCode,
+  joinError,
+}) => {
   const [username, setUsername] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [error, setError] = useState("");

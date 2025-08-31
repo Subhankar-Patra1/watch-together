@@ -4,7 +4,9 @@ import LandingPage from "./components/LandingPage";
 import RoomPage from "./components/RoomPage";
 import "./App.css";
 
-const serverUrl = process.env.REACT_APP_SERVER_URL || "https://watch-together-server-production-d25a.up.railway.app";
+const serverUrl =
+  process.env.REACT_APP_SERVER_URL ||
+  "https://watch-together-server-production-d25a.up.railway.app";
 console.log("🚀 Using server URL:", serverUrl);
 const socket = io(serverUrl);
 
@@ -18,20 +20,31 @@ function App() {
   // Socket event handlers
   useEffect(() => {
     socket.on("room-joined", (data) => {
+      console.log("✅ Frontend: Successfully joined room:", data);
       setCurrentPage("room");
       setJoinError(""); // Clear any previous errors
     });
 
     socket.on("error", (data) => {
       // Handle join room errors by staying on landing page
-      console.error("Socket error:", data.message);
+      console.error("❌ Frontend: Socket error:", data.message);
       setJoinError(data.message);
       setCurrentPage("landing");
+    });
+
+    socket.on("connect", () => {
+      console.log("🔌 Frontend: Socket connected to server");
+    });
+
+    socket.on("disconnect", () => {
+      console.log("🔌 Frontend: Socket disconnected from server");
     });
 
     return () => {
       socket.off("room-joined");
       socket.off("error");
+      socket.off("connect");
+      socket.off("disconnect");
     };
   }, []);
 
@@ -47,11 +60,13 @@ function App() {
     }
   }, []);
 
-  const joinRoom = (roomCode, user) => {
-    setUsername(user);
-    setRoomData({ roomCode });
-    // Don't switch pages immediately - wait for room-joined confirmation
-    socket.emit("join-room", { roomCode, username: user });
+  const joinRoom = (roomCode, username) => {
+    console.log(`🔗 Frontend: Attempting to join room ${roomCode} with username ${username}`);
+    setJoinError(""); // Clear previous errors
+    
+    socket.emit("join-room", { roomCode, username });
+    // Don't immediately switch pages - wait for success/error response
+    console.log(`📤 Frontend: Sent join-room event for ${roomCode}`);
   };
 
   const createRoom = async (user) => {

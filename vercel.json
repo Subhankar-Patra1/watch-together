@@ -1,10 +1,13 @@
 {
   "version": 2,
+  "name": "watch-together-frontend",
   "builds": [
     {
       "src": "client/package.json",
       "use": "@vercel/static-build",
-      "config": { "distDir": "build" }
+      "config": {
+        "distDir": "build"
+      }
     }
   ],
   "routes": [
@@ -12,7 +15,7 @@
       "handle": "filesystem"
     },
     {
-      "src": "/.*",
+      "src": "/(.*)",
       "dest": "/client/build/index.html"
     }
   ]

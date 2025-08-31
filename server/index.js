@@ -9,11 +9,7 @@ const server = http.createServer(app);
 
 const allowedOrigins =
   process.env.NODE_ENV === "production"
-    ? [
-        "https://watch-together-xyz.vercel.app",
-        "https://your-actual-vercel-url.vercel.app",
-        "https://watch-together-510k.onrender.com"
-      ]
+    ? ["https://watch-videos-together.vercel.app"]
     : ["http://localhost:3000", "http://localhost:3001"];
 
 const io = socketIo(server, {

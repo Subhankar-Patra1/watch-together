@@ -34,16 +34,18 @@ function App() {
 
   const createRoom = async (user) => {
     try {
-      console.log("Attempting to create room...");
+      console.log("=== DEBUG INFO ===");
       console.log("Server URL:", serverUrl);
-
+      console.log("Environment:", process.env.NODE_ENV);
+      console.log("All env vars:", Object.keys(process.env).filter(key => key.startsWith('REACT_APP')));
+      
       const response = await fetch(`${serverUrl}/api/create-room`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
 
       console.log("Response status:", response.status);
-      console.log("Response OK:", response.ok);
+      console.log("Response headers:", Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -60,7 +62,10 @@ function App() {
 
       joinRoom(data.roomCode, user);
     } catch (error) {
-      console.error("Error creating room:", error);
+      console.error("=== ERROR DETAILS ===");
+      console.error("Error type:", error.constructor.name);
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
       throw error; // Re-throw to let the component handle it
     }
   };

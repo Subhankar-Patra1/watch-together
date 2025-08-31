@@ -108,6 +108,7 @@ app.post("/api/create-room", (req, res) => {
       },
       messages: [],
       host: null,
+      emptyTimestamp: null,
     });
 
     console.log(`Room ${finalRoomCode} created successfully`);
@@ -204,6 +205,9 @@ io.on("connection", (socket) => {
     socket.join(roomCode);
     socket.roomCode = roomCode;
     socket.username = username;
+
+    // Clear empty timestamp since room is no longer empty
+    room.emptyTimestamp = null;
 
     // Set host if first user
     if (!room.host) {
@@ -448,9 +452,19 @@ io.on("connection", (socket) => {
           io.to(room.users[0].id).emit("host-status", { isHost: true });
         }
 
-        // Delete room if empty
+        // Mark room as empty but don't delete immediately (for shared links)
         if (room.users.length === 0) {
-          rooms.delete(roomCode);
+          room.emptyTimestamp = Date.now();
+          // Delete room after 10 minutes of being empty
+          setTimeout(() => {
+            const currentRoom = rooms.get(roomCode);
+            if (currentRoom && currentRoom.users.length === 0) {
+              rooms.delete(roomCode);
+              console.log(
+                `Room ${roomCode} deleted after being empty for 10 minutes`
+              );
+            }
+          }, 10 * 60 * 1000); // 10 minutes
         } else {
           // Send username with the user-left event
           socket.to(roomCode).emit("user-left", {

@@ -11,7 +11,12 @@
     "start": "cd server && npm start",
     "vercel-build": "cd client && npm ci && npm run build"
   },
-  "keywords": ["youtube", "sync", "chat", "realtime"],
+  "keywords": [
+    "youtube",
+    "sync",
+    "chat",
+    "realtime"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {

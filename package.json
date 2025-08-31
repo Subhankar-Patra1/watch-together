@@ -2,13 +2,13 @@
   "name": "watchtogether",
   "version": "1.0.0",
   "description": "Real-time YouTube sync platform with chat",
-  "main": "server/index.js",
+  "main": "index.js",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd server && npm run dev",
     "client": "cd client && npm start",
-    "build": "cd server && npm install",
-    "start": "cd server && npm start",
+    "build": "npm install && cd server && npm install",
+    "start": "node index.js",
     "vercel-build": "cd client && npm ci && npm run build"
   },
   "keywords": [

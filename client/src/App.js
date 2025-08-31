@@ -61,9 +61,11 @@ function App() {
   }, []);
 
   const joinRoom = (roomCode, username) => {
-    console.log(`🔗 Frontend: Attempting to join room ${roomCode} with username ${username}`);
+    console.log(
+      `🔗 Frontend: Attempting to join room ${roomCode} with username ${username}`
+    );
     setJoinError(""); // Clear previous errors
-    
+
     socket.emit("join-room", { roomCode, username });
     // Don't immediately switch pages - wait for success/error response
     console.log(`📤 Frontend: Sent join-room event for ${roomCode}`);

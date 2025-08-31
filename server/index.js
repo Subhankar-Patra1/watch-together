@@ -118,7 +118,7 @@ app.post("/api/create-room", (req, res) => {
       id: finalRoomCode,
       users: [],
       hasUsers: false,
-      userCount: 0
+      userCount: 0,
     });
     const response = { roomCode: finalRoomCode };
     console.log("Sending response:", response);
@@ -161,11 +161,11 @@ app.get("/api/debug/rooms", (req, res) => {
   const roomsInfo = Array.from(rooms.entries()).map(([code, room]) => ({
     roomCode: code,
     userCount: room.users.length,
-    users: room.users.map(u => ({ id: u.id, username: u.username })),
+    users: room.users.map((u) => ({ id: u.id, username: u.username })),
     hasVideo: !!room.video,
     emptyTimestamp: room.emptyTimestamp,
   }));
-  
+
   res.json({
     totalRooms: rooms.size,
     rooms: roomsInfo,
@@ -185,13 +185,13 @@ io.on("connection", (socket) => {
 
     if (!room) {
       console.log(`ERROR: Room ${roomCode} not found`);
-      console.log(`Available rooms: [${Array.from(rooms.keys()).join(', ')}]`);
+      console.log(`Available rooms: [${Array.from(rooms.keys()).join(", ")}]`);
       console.log(`Total rooms in memory: ${rooms.size}`);
-      socket.emit("error", { 
+      socket.emit("error", {
         message: "Room not found",
         details: `Room ${roomCode} does not exist. Available rooms: ${rooms.size}`,
         availableRooms: Array.from(rooms.keys()),
-        requestedRoom: roomCode
+        requestedRoom: roomCode,
       });
       return;
     }
@@ -200,22 +200,26 @@ io.on("connection", (socket) => {
 
     if (room.users.length >= 6) {
       console.log(`ERROR: Room ${roomCode} is full (${room.users.length}/6)`);
-      socket.emit("error", { 
+      socket.emit("error", {
         message: "Room is full",
         details: `Room ${roomCode} has ${room.users.length}/6 users`,
-        currentUsers: room.users.map(u => u.username)
+        currentUsers: room.users.map((u) => u.username),
       });
       return;
     }
 
     // Check if username is already taken
     if (room.users.some((user) => user.username === username)) {
-      console.log(`ERROR: Username ${username} already taken in room ${roomCode}`);
-      console.log(`Existing users: ${room.users.map(u => u.username).join(', ')}`);
-      socket.emit("error", { 
+      console.log(
+        `ERROR: Username ${username} already taken in room ${roomCode}`
+      );
+      console.log(
+        `Existing users: ${room.users.map((u) => u.username).join(", ")}`
+      );
+      socket.emit("error", {
         message: "Username already taken",
         details: `Username "${username}" is already in use in room ${roomCode}`,
-        existingUsers: room.users.map(u => u.username)
+        existingUsers: room.users.map((u) => u.username),
       });
       return;
     }

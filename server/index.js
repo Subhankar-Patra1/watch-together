@@ -112,6 +112,8 @@ app.post("/api/create-room", (req, res) => {
     });
 
     console.log(`Room ${finalRoomCode} created successfully`);
+    console.log(`Total rooms now:`, rooms.size);
+    console.log(`All room codes:`, Array.from(rooms.keys()));
     const response = { roomCode: finalRoomCode };
     console.log("Sending response:", response);
     res.json(response);
@@ -154,23 +156,32 @@ io.on("connection", (socket) => {
 
   socket.on("join-room", ({ roomCode, username }) => {
     console.log(`User ${username} attempting to join room ${roomCode}`);
+    console.log(`Available rooms:`, Array.from(rooms.keys()));
+    console.log(`Room exists:`, rooms.has(roomCode));
     const room = rooms.get(roomCode);
 
     if (!room) {
+      console.log(`ERROR: Room ${roomCode} not found`);
       socket.emit("error", { message: "Room not found" });
       return;
     }
 
+    console.log(`Room ${roomCode} found with ${room.users.length} users`);
+
     if (room.users.length >= 6) {
+      console.log(`ERROR: Room ${roomCode} is full (${room.users.length}/6)`);
       socket.emit("error", { message: "Room is full" });
       return;
     }
 
     // Check if username is already taken
     if (room.users.some((user) => user.username === username)) {
+      console.log(`ERROR: Username ${username} already taken in room ${roomCode}`);
       socket.emit("error", { message: "Username already taken" });
       return;
     }
+
+    console.log(`User ${username} validation passed for room ${roomCode}`);
 
     // Generate a vibrant, distinct color for the user
     const predefinedColors = [

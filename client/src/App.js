@@ -4,9 +4,8 @@ import LandingPage from "./components/LandingPage";
 import RoomPage from "./components/RoomPage";
 import "./App.css";
 
-const serverUrl =
-  process.env.REACT_APP_SERVER_URL ||
-  "https://watch-together-server-production-d25a.up.railway.app";
+// Force Railway URL to bypass Vercel environment caching
+const serverUrl = "https://watch-together-server-production-d25a.up.railway.app";
 console.log("🚀 Using server URL:", serverUrl);
 const socket = io(serverUrl);
 

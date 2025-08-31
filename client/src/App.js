@@ -36,7 +36,7 @@ function App() {
     try {
       console.log("Attempting to create room...");
       console.log("Server URL:", serverUrl);
-      
+
       const response = await fetch(`${serverUrl}/api/create-room`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

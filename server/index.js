@@ -9,33 +9,31 @@ const server = http.createServer(app);
 
 const allowedOrigins =
   process.env.NODE_ENV === "production"
-    ? function (origin, callback) {
-        // Allow requests with no origin (mobile apps, etc.)
-        if (!origin) return callback(null, true);
-        
-        // Allow all localhost and vercel.app domains
-        if (origin.includes('localhost') || origin.includes('.vercel.app')) {
-          callback(null, true);
-        } else {
-          callback(new Error('Not allowed by CORS'));
-        }
-      }
+    ? ["https://watch-videos-together.vercel.app", "https://watch-videos-together-czfff59y8.vercel.app"]
     : ["http://localhost:3000", "http://localhost:3001"];
 
+// Function for dynamic CORS checking
+const corsOriginFunction = function (origin, callback) {
+  // Allow requests with no origin (mobile apps, etc.)
+  if (!origin) return callback(null, true);
+  
+  // Allow all localhost and vercel.app domains
+  if (origin.includes('localhost') || origin.includes('.vercel.app')) {
+    callback(null, true);
+  } else {
+    callback(new Error('Not allowed by CORS'));
+  }
+};
+
+const corsOptions = process.env.NODE_ENV === "production" 
+  ? { origin: corsOriginFunction, methods: ["GET", "POST"], credentials: true }
+  : { origin: allowedOrigins, methods: ["GET", "POST"], credentials: true };
+
 const io = socketIo(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-  },
+  cors: corsOptions,
 });
 
-app.use(
-  cors({
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true,
-  })
-);
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Store room data in memory (use Redis/MongoDB for production)

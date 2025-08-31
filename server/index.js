@@ -185,7 +185,14 @@ io.on("connection", (socket) => {
 
     if (!room) {
       console.log(`ERROR: Room ${roomCode} not found`);
-      socket.emit("error", { message: "Room not found" });
+      console.log(`Available rooms: [${Array.from(rooms.keys()).join(', ')}]`);
+      console.log(`Total rooms in memory: ${rooms.size}`);
+      socket.emit("error", { 
+        message: "Room not found",
+        details: `Room ${roomCode} does not exist. Available rooms: ${rooms.size}`,
+        availableRooms: Array.from(rooms.keys()),
+        requestedRoom: roomCode
+      });
       return;
     }
 
@@ -193,14 +200,23 @@ io.on("connection", (socket) => {
 
     if (room.users.length >= 6) {
       console.log(`ERROR: Room ${roomCode} is full (${room.users.length}/6)`);
-      socket.emit("error", { message: "Room is full" });
+      socket.emit("error", { 
+        message: "Room is full",
+        details: `Room ${roomCode} has ${room.users.length}/6 users`,
+        currentUsers: room.users.map(u => u.username)
+      });
       return;
     }
 
     // Check if username is already taken
     if (room.users.some((user) => user.username === username)) {
       console.log(`ERROR: Username ${username} already taken in room ${roomCode}`);
-      socket.emit("error", { message: "Username already taken" });
+      console.log(`Existing users: ${room.users.map(u => u.username).join(', ')}`);
+      socket.emit("error", { 
+        message: "Username already taken",
+        details: `Username "${username}" is already in use in room ${roomCode}`,
+        existingUsers: room.users.map(u => u.username)
+      });
       return;
     }
 

@@ -8,7 +8,7 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = process.env.NODE_ENV === 'production' 
-  ? ["https://your-app-name.vercel.app"] 
+  ? ["https://watch-together-xyz.vercel.app"] 
   : ["http://localhost:3000", "http://localhost:3001"];
 
 const io = socketIo(server, {

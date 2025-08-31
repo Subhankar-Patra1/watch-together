@@ -29,9 +29,14 @@ const allowedOrigins =
       }
     : ["http://localhost:3000", "http://localhost:3001"];
 
+// Socket.IO needs a simpler CORS configuration
+const socketIoAllowedOrigins = process.env.NODE_ENV === "production" 
+  ? true  // Allow all origins for now to test
+  : ["http://localhost:3000", "http://localhost:3001"];
+
 const io = socketIo(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: socketIoAllowedOrigins,
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -71,7 +76,7 @@ app.post("/api/create-room", (req, res) => {
   console.log("Origin:", req.headers.origin);
   console.log("Method:", req.method);
   console.log("URL:", req.url);
-  
+
   try {
     const roomCode = generateRoomCode();
     console.log(`Creating room with code: ${roomCode}`);
@@ -111,14 +116,19 @@ app.post("/api/create-room", (req, res) => {
   } catch (error) {
     console.error("Error creating room:", error);
     console.error("Error stack:", error.stack);
-    res.status(500).json({ error: "Internal server error", details: error.message });
+    res
+      .status(500)
+      .json({ error: "Internal server error", details: error.message });
   }
 });
 
 // Test endpoint
 app.get("/api/test", (req, res) => {
   console.log("Test endpoint hit");
-  res.json({ status: "Server is running", timestamp: new Date().toISOString() });
+  res.json({
+    status: "Server is running",
+    timestamp: new Date().toISOString(),
+  });
 });
 
 app.get("/api/room/:roomCode", (req, res) => {

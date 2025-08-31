@@ -11,20 +11,20 @@ const allowedOrigins =
   process.env.NODE_ENV === "production"
     ? function (origin, callback) {
         console.log(`CORS check for origin: ${origin}`);
-        
+
         // Allow requests with no origin (mobile apps, etc.)
         if (!origin) {
-          console.log('Allowing request with no origin');
+          console.log("Allowing request with no origin");
           return callback(null, true);
         }
-        
+
         // Allow all localhost and vercel.app domains
-        if (origin.includes('localhost') || origin.includes('.vercel.app')) {
-          console.log('Allowing origin:', origin);
+        if (origin.includes("localhost") || origin.includes(".vercel.app")) {
+          console.log("Allowing origin:", origin);
           callback(null, true);
         } else {
-          console.log('Blocking origin:', origin);
-          callback(new Error('Not allowed by CORS'));
+          console.log("Blocking origin:", origin);
+          callback(new Error("Not allowed by CORS"));
         }
       }
     : ["http://localhost:3000", "http://localhost:3001"];
@@ -37,11 +37,13 @@ const io = socketIo(server, {
   },
 });
 
-app.use(cors({
-  origin: allowedOrigins,
-  methods: ["GET", "POST"],
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // Store room data in memory (use Redis/MongoDB for production)
@@ -64,7 +66,12 @@ function extractVideoId(url) {
 }
 
 app.post("/api/create-room", (req, res) => {
-  console.log("Received create-room request");
+  console.log("=== CREATE ROOM REQUEST ===");
+  console.log("Headers:", req.headers);
+  console.log("Origin:", req.headers.origin);
+  console.log("Method:", req.method);
+  console.log("URL:", req.url);
+  
   try {
     const roomCode = generateRoomCode();
     console.log(`Creating room with code: ${roomCode}`);
@@ -98,11 +105,20 @@ app.post("/api/create-room", (req, res) => {
     });
 
     console.log(`Room ${finalRoomCode} created successfully`);
-    res.json({ roomCode: finalRoomCode });
+    const response = { roomCode: finalRoomCode };
+    console.log("Sending response:", response);
+    res.json(response);
   } catch (error) {
     console.error("Error creating room:", error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("Error stack:", error.stack);
+    res.status(500).json({ error: "Internal server error", details: error.message });
   }
+});
+
+// Test endpoint
+app.get("/api/test", (req, res) => {
+  console.log("Test endpoint hit");
+  res.json({ status: "Server is running", timestamp: new Date().toISOString() });
 });
 
 app.get("/api/room/:roomCode", (req, res) => {

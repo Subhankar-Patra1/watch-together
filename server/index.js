@@ -114,6 +114,12 @@ app.post("/api/create-room", (req, res) => {
     console.log(`Room ${finalRoomCode} created successfully`);
     console.log(`Total rooms now:`, rooms.size);
     console.log(`All room codes:`, Array.from(rooms.keys()));
+    console.log(`New room state:`, {
+      id: finalRoomCode,
+      users: [],
+      hasUsers: false,
+      userCount: 0
+    });
     const response = { roomCode: finalRoomCode };
     console.log("Sending response:", response);
     res.json(response);
@@ -147,6 +153,23 @@ app.get("/api/room/:roomCode", (req, res) => {
     roomCode,
     userCount: room.users.length,
     hasVideo: !!room.video,
+  });
+});
+
+// Debug endpoint to list all rooms
+app.get("/api/debug/rooms", (req, res) => {
+  const roomsInfo = Array.from(rooms.entries()).map(([code, room]) => ({
+    roomCode: code,
+    userCount: room.users.length,
+    users: room.users.map(u => ({ id: u.id, username: u.username })),
+    hasVideo: !!room.video,
+    emptyTimestamp: room.emptyTimestamp,
+  }));
+  
+  res.json({
+    totalRooms: rooms.size,
+    rooms: roomsInfo,
+    timestamp: new Date().toISOString(),
   });
 });
 

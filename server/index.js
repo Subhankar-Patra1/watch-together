@@ -30,9 +30,10 @@ const allowedOrigins =
     : ["http://localhost:3000", "http://localhost:3001"];
 
 // Socket.IO needs a simpler CORS configuration
-const socketIoAllowedOrigins = process.env.NODE_ENV === "production" 
-  ? true  // Allow all origins for now to test
-  : ["http://localhost:3000", "http://localhost:3001"];
+const socketIoAllowedOrigins =
+  process.env.NODE_ENV === "production"
+    ? true // Allow all origins for now to test
+    : ["http://localhost:3000", "http://localhost:3001"];
 
 const io = socketIo(server, {
   cors: {

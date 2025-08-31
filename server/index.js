@@ -7,9 +7,10 @@ const { v4: uuidv4 } = require("uuid");
 const app = express();
 const server = http.createServer(app);
 
-const allowedOrigins = process.env.NODE_ENV === 'production' 
-  ? ["https://watch-together-xyz.vercel.app"] 
-  : ["http://localhost:3000", "http://localhost:3001"];
+const allowedOrigins =
+  process.env.NODE_ENV === "production"
+    ? ["https://watch-videos-together.vercel.app"]
+    : ["http://localhost:3000", "http://localhost:3001"];
 
 const io = socketIo(server, {
   cors: {

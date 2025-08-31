@@ -7,8 +7,9 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd server && npm run dev",
     "client": "cd client && npm start",
-    "build": "cd client && npm run build",
-    "start": "cd server && npm start"
+    "build": "cd client && npm ci && npm run build",
+    "start": "cd server && npm start",
+    "vercel-build": "cd client && npm ci && npm run build"
   },
   "keywords": ["youtube", "sync", "chat", "realtime"],
   "author": "",

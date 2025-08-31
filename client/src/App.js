@@ -1,0 +1,88 @@
+import React, { useState, useEffect } from "react";
+import io from "socket.io-client";
+import LandingPage from "./components/LandingPage";
+import RoomPage from "./components/RoomPage";
+import "./App.css";
+
+const serverUrl = process.env.REACT_APP_SERVER_URL || "http://localhost:5000";
+const socket = io(serverUrl);
+
+function App() {
+  const [currentPage, setCurrentPage] = useState("landing");
+  const [roomData, setRoomData] = useState(null);
+  const [username, setUsername] = useState("");
+  const [sharedRoomCode, setSharedRoomCode] = useState(null);
+
+  // Check for shared room link on app load
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomCodeFromUrl = urlParams.get("roomCode");
+
+    if (roomCodeFromUrl) {
+      setSharedRoomCode(roomCodeFromUrl.toUpperCase());
+      // Clear the URL parameter for cleaner URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
+  const joinRoom = (roomCode, user) => {
+    setUsername(user);
+    setRoomData({ roomCode });
+    setCurrentPage("room");
+    socket.emit("join-room", { roomCode, username: user });
+  };
+
+  const createRoom = async (user) => {
+    try {
+      const response = await fetch(`${serverUrl}/api/create-room`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!data.roomCode) {
+        throw new Error("Invalid response from server");
+      }
+
+      joinRoom(data.roomCode, user);
+    } catch (error) {
+      console.error("Error creating room:", error);
+      throw error; // Re-throw to let the component handle it
+    }
+  };
+
+  const leaveRoom = () => {
+    socket.disconnect();
+    socket.connect();
+    setCurrentPage("landing");
+    setRoomData(null);
+    setUsername("");
+  };
+
+  return (
+    <div className="App">
+      {currentPage === "landing" && (
+        <LandingPage
+          onCreateRoom={createRoom}
+          onJoinRoom={joinRoom}
+          sharedRoomCode={sharedRoomCode}
+        />
+      )}
+      {currentPage === "room" && (
+        <RoomPage
+          socket={socket}
+          roomCode={roomData.roomCode}
+          username={username}
+          onLeaveRoom={leaveRoom}
+        />
+      )}
+    </div>
+  );
+}
+
+export default App;

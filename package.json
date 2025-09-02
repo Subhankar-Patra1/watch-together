@@ -12,7 +12,7 @@
     "client": "cd client && npm start",
     "build": "echo 'Build complete'",
     "start": "node index.js",
-    "vercel-build": "cd client && npm ci && npm run build"
+    "vercel-build": "cd client && npm ci && npm run build:production"
   },
   "keywords": [
     "youtube",

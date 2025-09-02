@@ -21,7 +21,7 @@
   "scripts": {
     "start": "craco start",
     "build": "craco build",
-    "build:production": "REACT_APP_SERVER_URL=https://watch-together-server-production.onrender.com craco build",
+    "build:production": "REACT_APP_SERVER_URL=https://watch-together-519k.onrender.com craco build",
     "test": "craco test",
     "eject": "react-scripts eject"
   },

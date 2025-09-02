@@ -21,6 +21,7 @@ A real-time YouTube and video streaming sync platform with chat functionality.
 ## Production Deployment
 
 ### Backend (Render.com)
+
 1. Connect your GitHub repository to Render
 2. Create a new Web Service
 3. Use these settings:
@@ -29,6 +30,7 @@ A real-time YouTube and video streaming sync platform with chat functionality.
    - Environment: `NODE_ENV=production`
 
 ### Frontend (Vercel)
+
 1. Connect your GitHub repository to Vercel
 2. Set build command to use production configuration
 3. The frontend will automatically use the production server URL
@@ -36,6 +38,7 @@ A real-time YouTube and video streaming sync platform with chat functionality.
 ## Local Development
 
 1. Install dependencies:
+
 ```bash
 npm install
 cd client && npm install
@@ -43,6 +46,7 @@ cd ../server && npm install
 ```
 
 2. Start development servers:
+
 ```bash
 npm run dev
 ```
@@ -52,6 +56,7 @@ npm run dev
 ## Environment Configuration
 
 The application automatically configures itself for production:
+
 - Development: Uses `localhost:5000` for the server
 - Production: Uses your deployed server URL
 

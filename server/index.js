@@ -2,6 +2,7 @@ const express = require("express");
 const http = require("http");
 const socketIo = require("socket.io");
 const cors = require("cors");
+const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 
 const app = express();
@@ -27,22 +28,18 @@ const allowedOrigins =
           callback(new Error("Not allowed by CORS"));
         }
       }
-    : ["http://localhost:3000", "http://localhost:3001"];
+    : true; // Allow all origins in development
 
-// Socket.IO needs a simpler CORS configuration
-const socketIoAllowedOrigins =
-  process.env.NODE_ENV === "production"
-    ? true // Allow all origins for now to test
-    : ["http://localhost:3000", "http://localhost:3001"];
-
+// Socket.IO setup with CORS
 const io = socketIo(server, {
   cors: {
-    origin: socketIoAllowedOrigins,
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true,
   },
 });
 
+// CORS middleware
 app.use(
   cors({
     origin: allowedOrigins,
@@ -70,6 +67,139 @@ function extractVideoId(url) {
   const match = url.match(regex);
   return match ? match[1] : null;
 }
+
+// CORS Proxy for video streams (VLC-style bypass)
+app.get("/api/proxy-stream", async (req, res) => {
+  try {
+    const { url } = req.query;
+
+    if (!url) {
+      return res.status(400).json({ error: "URL parameter is required" });
+    }
+
+    // Prevent recursive proxying
+    if (url.includes("/api/proxy-stream") || url.includes("localhost:5000")) {
+      console.log(`🚫 Preventing recursive proxy for: ${url}`);
+      return res.status(400).json({ error: "Recursive proxy detected" });
+    }
+
+    console.log(`🔗 Proxying stream request for: ${url}`);
+
+    // Validate URL
+    let targetUrl;
+    try {
+      targetUrl = new URL(url);
+    } catch (e) {
+      return res.status(400).json({ error: "Invalid URL format" });
+    }
+
+    // Set headers to mimic a real browser (Chrome) request
+    const headers = {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      Accept:
+        "application/vnd.apple.mpegurl, application/x-mpegurl, application/octet-stream, */*",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Accept-Encoding": "identity", // Don't compress for streaming
+      Connection: "keep-alive",
+      Range: req.headers.range || "bytes=0-", // Support range requests
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
+      "Sec-Fetch-Dest": "video",
+      "Sec-Fetch-Mode": "cors",
+      "Sec-Fetch-Site": "cross-site",
+      "Sec-Ch-Ua":
+        '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+      "Sec-Ch-Ua-Mobile": "?0",
+      "Sec-Ch-Ua-Platform": '"Windows"',
+    };
+
+    // Add referrer if the original URL contains domain info
+    try {
+      headers["Referer"] = `${targetUrl.protocol}//${targetUrl.hostname}/`;
+      headers["Origin"] = `${targetUrl.protocol}//${targetUrl.hostname}`;
+
+      // Special handling for shadowlandschronicles.com - try different referrers
+      if (targetUrl.hostname.includes("shadowlandschronicles.com")) {
+        // Try different possible referrer patterns
+        headers["Referer"] = "https://shadowlandschronicles.com/";
+        // Remove some security headers that might block us
+        delete headers["Sec-Fetch-Site"];
+        headers["Sec-Fetch-Site"] = "same-origin";
+        // Add cookies header in case it's needed
+        headers["Cookie"] = "";
+      }
+    } catch (e) {
+      console.log("Could not set referrer headers:", e.message);
+    }
+
+    const response = await axios({
+      method: "GET",
+      url: targetUrl.href,
+      headers: headers,
+      responseType: "stream",
+      timeout: 60000, // Increased to 60 seconds for slow streaming sites
+      maxRedirects: 10, // More redirects for complex CDNs
+      validateStatus: function (status) {
+        return status < 500; // Accept redirects and client errors
+      },
+    });
+
+    console.log(
+      `✅ Successful response: ${response.status} for ${targetUrl.href}`
+    );
+    console.log(`📋 Response headers:`, response.headers);
+    console.log(`📄 Content-Type: ${response.headers["content-type"]}`);
+
+    // Check if we're getting HTML instead of M3U8
+    const contentType = response.headers["content-type"] || "";
+    if (contentType.includes("text/html")) {
+      console.log(
+        "⚠️ WARNING: Received HTML content instead of M3U8 playlist!"
+      );
+      console.log(
+        "🔒 This might be a protected URL requiring authentication or different headers"
+      );
+    }
+
+    // Forward response headers
+    res.set({
+      "Content-Type":
+        response.headers["content-type"] || "application/vnd.apple.mpegurl",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+      "Access-Control-Allow-Headers": "Range, Content-Range",
+      "Content-Length": response.headers["content-length"],
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "no-cache",
+    });
+
+    // Handle range requests
+    if (response.headers["content-range"]) {
+      res.set("Content-Range", response.headers["content-range"]);
+      res.status(206); // Partial Content
+    }
+
+    // Pipe the stream
+    response.data.pipe(res);
+
+    response.data.on("error", (error) => {
+      console.error("Stream error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Stream error" });
+      }
+    });
+  } catch (error) {
+    console.error("Proxy error:", error.message);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: "Failed to proxy stream",
+        details: error.message,
+        url: req.query.url,
+      });
+    }
+  }
+});
 
 app.post("/api/create-room", (req, res) => {
   console.log("=== CREATE ROOM REQUEST ===");
@@ -249,10 +379,14 @@ io.on("connection", (socket) => {
         ? predefinedColors[colorIndex]
         : `hsl(${Math.floor(Math.random() * 360)}, 75%, 60%)`;
 
+    // Determine if this user will be the host (first user)
+    const isHost = !room.host;
+
     const user = {
       id: socket.id,
       username,
       color: userColor,
+      isHost: isHost,
     };
 
     room.users.push(user);
@@ -272,17 +406,12 @@ io.on("connection", (socket) => {
     // Send room state to new user
     socket.emit("room-joined", {
       roomCode,
-      users: room.users.map((user) => ({
-        ...user,
-        isHost: user.id === room.host,
-      })),
+      users: room.users,
       video: room.video,
       videoState: room.videoState,
       messages: room.messages.slice(-50), // Last 50 messages
       isHost: room.host === socket.id,
     });
-
-    // Send video call state if it exists
 
     // If there's a video playing, send initial sync after a delay to ensure player is ready
     if (room.video && room.videoState) {
@@ -306,10 +435,7 @@ io.on("connection", (socket) => {
 
     // Send updated user list to ALL users in the room (including the new user)
     io.to(roomCode).emit("users-updated", {
-      users: room.users.map((user) => ({
-        ...user,
-        isHost: user.id === room.host,
-      })),
+      users: room.users,
     });
   });
 
@@ -337,6 +463,18 @@ io.on("connection", (socket) => {
       processedVideoData = {
         type: "youtube",
         videoId: videoData.videoId,
+        url: videoData.url,
+      };
+    } else if (videoData.type === "hls") {
+      // HLS stream
+      processedVideoData = {
+        type: "hls",
+        url: videoData.url,
+      };
+    } else if (videoData.type === "direct") {
+      // Direct video file
+      processedVideoData = {
+        type: "direct",
         url: videoData.url,
       };
     } else if (typeof videoData === "string" || videoData.videoUrl) {
@@ -400,6 +538,74 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on("video-sync-request", ({ action, currentTime }) => {
+    console.log(`🔄 Received video-sync-request from ${socket.username}:`, {
+      action,
+      currentTime,
+      socketId: socket.id,
+      roomCode: socket.roomCode,
+    });
+
+    const roomCode = socket.roomCode;
+    const room = rooms.get(roomCode);
+
+    if (!room) {
+      console.log(`🚫 Room ${roomCode} not found`);
+      socket.emit("sync-error", { message: "Room not found" });
+      return;
+    }
+
+    // Check if the user is the host (only host can sync)
+    const user = room.users.find((u) => u.id === socket.id);
+    if (!user) {
+      console.log(`🚫 User ${socket.username} not found in room ${roomCode}`);
+      socket.emit("sync-error", { message: "User not found in room" });
+      return;
+    }
+
+    if (!user.isHost) {
+      console.log(
+        `🚫 Non-host user ${socket.username} tried to sync video in room ${roomCode}`
+      );
+      socket.emit("sync-error", { message: "Only host can sync video" });
+      return;
+    }
+
+    console.log(
+      `✅ Host ${socket.username} is syncing video in room ${roomCode}`
+    );
+
+    // Update room video state
+    room.videoState.currentTime = currentTime;
+    room.videoState.lastUpdate = Date.now();
+
+    if (action === "play") {
+      room.videoState.isPlaying = true;
+    } else if (action === "pause") {
+      room.videoState.isPlaying = false;
+    }
+
+    const syncData = {
+      action,
+      currentTime: room.videoState.currentTime,
+      isPlaying: room.videoState.isPlaying,
+      timestamp: room.videoState.lastUpdate,
+      syncedBy: socket.username, // Add who triggered the sync
+    };
+
+    console.log(`🔄 Emitting video-sync to room ${roomCode}:`, syncData);
+
+    // Emit sync to all other users in the room
+    socket.to(roomCode).emit("video-sync", syncData);
+
+    // Confirm sync was sent
+    socket.emit("sync-success", { message: "Sync sent to all users" });
+
+    console.log(
+      `🔄 Host ${socket.username} synced video in room ${roomCode} at ${currentTime}s`
+    );
+  });
+
   socket.on("send-message", ({ message }) => {
     const roomCode = socket.roomCode;
     const room = rooms.get(roomCode);
@@ -435,66 +641,11 @@ io.on("connection", (socket) => {
       username: socket.username,
       emoji,
       timestamp: Date.now(),
-      color: room.users.find((u) => u.id === socket.id)?.color,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
     };
 
     io.to(roomCode).emit("new-reaction", reaction);
-  });
-
-  socket.on("typing-start", () => {
-    const roomCode = socket.roomCode;
-    if (roomCode) {
-      socket
-        .to(roomCode)
-        .emit("user-typing", { username: socket.username, isTyping: true });
-    }
-  });
-
-  socket.on("typing-stop", () => {
-    const roomCode = socket.roomCode;
-    if (roomCode) {
-      socket
-        .to(roomCode)
-        .emit("user-typing", { username: socket.username, isTyping: false });
-    }
-  });
-
-  socket.on("transfer-host", ({ newHostUsername }) => {
-    const roomCode = socket.roomCode;
-    const room = rooms.get(roomCode);
-
-    if (!room || room.host !== socket.id) {
-      socket.emit("error", {
-        message: "Only current host can transfer host status",
-      });
-      return;
-    }
-
-    // Find the new host user
-    const newHostUser = room.users.find(
-      (user) => user.username === newHostUsername
-    );
-    if (!newHostUser) {
-      socket.emit("error", { message: "Selected user not found in room" });
-      return;
-    }
-
-    // Transfer host status
-    room.host = newHostUser.id;
-
-    // Notify the new host
-    io.to(newHostUser.id).emit("host-status", { isHost: true });
-
-    // Notify all other users (except the new host) that they are not host
-    room.users.forEach((user) => {
-      if (user.id !== newHostUser.id) {
-        io.to(user.id).emit("host-status", { isHost: false });
-      }
-    });
-
-    console.log(
-      `Host transferred from ${socket.username} to ${newHostUsername} in room ${roomCode}`
-    );
   });
 
   socket.on("disconnect", () => {

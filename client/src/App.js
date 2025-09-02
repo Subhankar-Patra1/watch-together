@@ -4,9 +4,7 @@ import LandingPage from "./components/LandingPage";
 import RoomPage from "./components/RoomPage";
 import "./App.css";
 
-const serverUrl =
-  process.env.REACT_APP_SERVER_URL ||
-  "https://watch-together-server-production-d25a.up.railway.app";
+const serverUrl = process.env.REACT_APP_SERVER_URL || "http://localhost:5000";
 console.log("🚀 Using server URL:", serverUrl);
 const socket = io(serverUrl);
 
@@ -66,6 +64,7 @@ function App() {
       `🔗 Frontend: Attempting to join room ${roomCode} with username ${username}`
     );
     setJoinError(""); // Clear previous errors
+    setUsername(username); // Save the username to state!
 
     socket.emit("join-room", { roomCode, username });
     // Don't immediately switch pages - wait for success/error response
@@ -140,6 +139,7 @@ function App() {
           roomCode={roomData.roomCode}
           username={username}
           isHost={roomData.isHost}
+          initialRoomData={roomData}
           onLeaveRoom={leaveRoom}
         />
       )}

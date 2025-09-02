@@ -5,22 +5,24 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import YouTubePlayer from "./YouTubePlayer";
+import UniversalPlayer, {
+  detectVideoType,
+  extractYouTubeVideoId,
+} from "./UniversalPlayer";
 import VideoCallSection from "./VideoCallSection";
 import GroupChatSection from "./GroupChatSection";
 
-// Extract YouTube video ID from URL
-const extractVideoId = (url) => {
-  const regex =
-    /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/;
-  const match = url.match(regex);
-  return match ? match[1] : null;
-};
-
-const RoomPage = ({ socket, roomCode, username, isHost: initialIsHost, onLeaveRoom }) => {
-  const [users, setUsers] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [video, setVideo] = useState(null);
+const RoomPage = ({
+  socket,
+  roomCode,
+  username,
+  isHost: initialIsHost,
+  initialRoomData,
+  onLeaveRoom,
+}) => {
+  const [users, setUsers] = useState(initialRoomData?.users || []);
+  const [messages, setMessages] = useState(initialRoomData?.messages || []);
+  const [video, setVideo] = useState(initialRoomData?.video || null);
   const [isHost, setIsHost] = useState(initialIsHost || false);
   const [error, setError] = useState("");
   const [typingUsers, setTypingUsers] = useState([]);
@@ -89,9 +91,37 @@ const RoomPage = ({ socket, roomCode, username, isHost: initialIsHost, onLeaveRo
     });
 
     socket.on("video-sync", (data) => {
+      console.log("📡 Received video-sync:", data);
       if (playerRef.current) {
+        console.log("📡 Calling syncVideo on player");
         playerRef.current.syncVideo(data);
+
+        // Add a system message about the sync from host
+        if (data.syncedBy && data.syncedBy !== username) {
+          const systemMessage = {
+            id: `system-sync-${Date.now()}-${Math.random()}`,
+            type: "system",
+            message: `� Host ${data.syncedBy} synced everyone to the same position`,
+            timestamp: new Date().toISOString(),
+            icon: "🔄",
+          };
+          setMessages((prev) => [...prev, systemMessage]);
+        }
+      } else {
+        console.log("📡 No player ref available");
       }
+    });
+
+    socket.on("sync-success", (data) => {
+      console.log("✅ Sync success:", data);
+    });
+
+    socket.on("sync-error", (data) => {
+      console.error("❌ Sync error:", data);
+    });
+
+    socket.on("test-event", (data) => {
+      console.log("🧪 Received test-event:", data);
     });
 
     socket.on("new-message", (message) => {
@@ -134,6 +164,9 @@ const RoomPage = ({ socket, roomCode, username, isHost: initialIsHost, onLeaveRo
       socket.off("user-left");
       socket.off("video-set");
       socket.off("video-sync");
+      socket.off("sync-success");
+      socket.off("sync-error");
+      socket.off("test-event");
       socket.off("new-message");
       socket.off("user-typing");
       socket.off("host-status");
@@ -175,23 +208,116 @@ const RoomPage = ({ socket, roomCode, username, isHost: initialIsHost, onLeaveRo
 
   const handleSetVideo = useCallback(
     (videoData) => {
-      // YouTube URL only
-      const videoId = extractVideoId(videoData);
-      if (!videoId) {
-        setError("Invalid YouTube URL");
-        return;
+      const videoType = detectVideoType(videoData);
+      let processedVideoData;
+
+      switch (videoType) {
+        case "youtube":
+          const videoId = extractYouTubeVideoId(videoData);
+          if (!videoId) {
+            setError("Invalid YouTube URL");
+            return;
+          }
+          processedVideoData = {
+            type: "youtube",
+            videoId: videoId,
+            url: videoData,
+          };
+          break;
+
+        case "hls":
+          processedVideoData = {
+            type: "hls",
+            url: videoData,
+          };
+          break;
+
+        case "direct":
+          processedVideoData = {
+            type: "direct",
+            url: videoData,
+          };
+          break;
+
+        default:
+          setError(
+            "Unsupported video format. Please use YouTube URLs or direct video links (.mp4, .m3u8)"
+          );
+          return;
       }
-      const processedVideoData = {
-        type: "youtube",
-        videoId: videoId,
-        url: videoData,
-      };
 
       socket.emit("set-video", processedVideoData);
       setError("");
     },
     [socket]
   );
+
+  const handleSyncVideo = useCallback(() => {
+    console.log("🔄 Sync button clicked");
+    console.log("🔄 playerRef.current:", playerRef.current);
+    console.log("🔄 isHost:", isHost);
+    console.log("🔄 socket.connected:", socket.connected);
+    console.log("🔄 socket.id:", socket.id);
+    console.log("🔄 video:", video);
+
+    if (!playerRef.current) {
+      console.log("🔄 ❌ No player reference available");
+      return;
+    }
+
+    if (!video) {
+      console.log("🔄 ❌ No video loaded");
+      return;
+    }
+
+    if (!isHost) {
+      console.log("🔄 ❌ User is not host, cannot sync");
+      return;
+    }
+
+    try {
+      const currentTime = playerRef.current.getCurrentTime();
+      const playerState = playerRef.current.getPlayerState();
+
+      console.log("🔄 Current time:", currentTime);
+      console.log("🔄 Player state:", playerState);
+
+      if (currentTime === undefined || currentTime === null) {
+        console.log("🔄 ❌ Could not get current time from player");
+        return;
+      }
+
+      // Determine the action based on player state
+      let action = "seek";
+      if (playerState === 1) {
+        // YT.PlayerState.PLAYING = 1
+        action = "play";
+      } else if (playerState === 2) {
+        // YT.PlayerState.PAUSED = 2
+        action = "pause";
+      }
+
+      console.log(
+        "🔄 Emitting video-sync-request with action:",
+        action,
+        "time:",
+        currentTime
+      );
+
+      // Test socket connection first
+      socket.emit("test-sync", { test: "data", currentTime, action });
+
+      // Emit sync action to all other users
+      socket.emit("video-sync-request", {
+        action,
+        currentTime,
+      });
+
+      console.log("🔄 ✅ Sync request sent successfully");
+    } catch (error) {
+      console.error("🔄 ❌ Error during sync:", error);
+    }
+  }, [socket, isHost, video]);
 
   const handleCopyRoomCode = useCallback(async () => {
     try {
@@ -308,17 +434,14 @@ const RoomPage = ({ socket, roomCode, username, isHost: initialIsHost, onLeaveRo
       );
     }
 
-    if (video.type === "youtube") {
-      // YouTube video
-      const videoId = video.videoId || video.id;
-      return (
-        <YouTubePlayer
-          ref={playerRef}
-          videoId={videoId}
-          onVideoAction={handleVideoAction}
-        />
-      );
-    }
+    // Use UniversalPlayer for all video types
+    return (
+      <UniversalPlayer
+        ref={playerRef}
+        videoData={video}
+        onVideoAction={handleVideoAction}
+      />
+    );
   }, [video, isHost, handleVideoAction]);
 
   return (
@@ -356,7 +479,10 @@ const RoomPage = ({ socket, roomCode, username, isHost: initialIsHost, onLeaveRo
               </div>
               <div className="room-status-row">
                 <p className="room-status">
-                  {console.log("🔍 RoomPage: Rendering status with isHost:", isHost)}
+                  {console.log(
+                    "🔍 RoomPage: Rendering status with isHost:",
+                    isHost
+                  )}
                   {isHost
                     ? "👑 You are the host - You control the video and room settings"
                     : `👥 Member - The host controls the video`}
@@ -377,7 +503,14 @@ const RoomPage = ({ socket, roomCode, username, isHost: initialIsHost, onLeaveRo
 
           <div className="video-container">{videoPlayer}</div>
 
-          {isHost && <VideoControls onSetVideo={handleSetVideo} />}
+          {isHost && (
+            <VideoControls
+              onSetVideo={handleSetVideo}
+              onSyncVideo={handleSyncVideo}
+              video={video}
+              isHost={isHost}
+            />
+          )}
         </div>
       </div>
 
@@ -492,7 +625,7 @@ const HostTransferPopup = ({
   );
 };
 
-const VideoControls = ({ onSetVideo }) => {
+const VideoControls = ({ onSetVideo, onSyncVideo, video, isHost }) => {
   const [videoUrl, setVideoUrl] = useState("");
 
   const handleSubmit = (e) => {
@@ -500,6 +633,12 @@ const VideoControls = ({ onSetVideo }) => {
     if (videoUrl.trim()) {
       onSetVideo(videoUrl.trim());
       setVideoUrl("");
+    }
+  };
+
+  const handleSync = () => {
+    if (onSyncVideo) {
+      onSyncVideo();
     }
   };
 
@@ -511,9 +650,21 @@ const VideoControls = ({ onSetVideo }) => {
             type="url"
             value={videoUrl}
             onChange={(e) => setVideoUrl(e.target.value)}
-            placeholder="Paste YouTube URL here..."
+            placeholder="Paste video URL here (YouTube, .m3u8, .mp4)..."
           />
-          <button type="submit">Set Video</button>
+          <div className="video-buttons">
+            <button type="submit">Set Video</button>
+            {video && isHost && (
+              <button
+                type="button"
+                onClick={handleSync}
+                className="sync-btn"
+                title="Sync all members to your current video position and play state"
+              >
+                🔄 Sync All
+              </button>
+            )}
+          </div>
         </div>
       </form>
     </div>

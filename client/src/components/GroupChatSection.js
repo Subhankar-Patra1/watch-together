@@ -106,18 +106,45 @@ const GroupChatSection = ({
 
         <div className="chat-content">
           <div className="users-list-compact">
-            {users.map((user) => (
-              <div
-                key={user.id}
-                className={`user-badge ${user.isHost ? "host-badge" : ""}`}
-              >
-                <span className="user-name" style={{ color: user.color }}>
-                  {user.isHost && "👑 "}
-                  {user.username === currentUsername ? "You" : user.username}
-                  {user.isHost && " (Host)"}
-                </span>
-              </div>
-            ))}
+            {users.map((user) => {
+              console.log(
+                "User:",
+                user.username,
+                "Current:",
+                currentUsername,
+                "User object:",
+                JSON.stringify(user, null, 2)
+              );
+
+              // Try multiple ways to identify current user
+              const isCurrentUser =
+                (currentUsername &&
+                  String(user.username).trim().toLowerCase() ===
+                    String(currentUsername).trim().toLowerCase()) ||
+                user.isCurrentUser ||
+                user.isSelf ||
+                user.isMe;
+
+              console.log("Is current user:", isCurrentUser);
+
+              return (
+                <div
+                  key={user.id}
+                  className={`user-badge ${user.isHost ? "host-badge" : ""} ${
+                    isCurrentUser ? "current-user-badge" : ""
+                  }`}
+                >
+                  <span className="user-name" style={{ color: user.color }}>
+                    {user.isHost && "👑 "}
+                    {user.username}
+                    {isCurrentUser && (
+                      <span className="you-indicator"> (You)</span>
+                    )}
+                    {user.isHost && " (Host)"}
+                  </span>
+                </div>
+              );
+            })}
           </div>
 
           <div className="chat-messages">

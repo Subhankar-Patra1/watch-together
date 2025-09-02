@@ -395,6 +395,11 @@ body {
   align-items: center;
 }
 
+.video-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .video-input input {
   flex: 1;
   padding: 0.6rem 1rem;
@@ -431,6 +436,15 @@ body {
 .video-input button:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(56, 161, 105, 0.4);
+}
+
+.sync-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3) !important;
+}
+
+.sync-btn:hover {
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
 }
 
 /* Chat Section */
@@ -1440,6 +1454,17 @@ ctions Layout */
 
 .user-badge .user-name {
   font-weight: 500;
+}
+
+.user-badge.current-user-badge {
+  background: rgba(33, 150, 243, 0.2);
+  border: 1px solid rgba(33, 150, 243, 0.3);
+}
+
+.you-indicator {
+  color: #4caf50;
+  font-weight: 600;
+  font-size: 0.85em;
 }
 
 .group-chat-section .chat-messages {

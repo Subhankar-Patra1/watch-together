@@ -81,6 +81,20 @@ function App() {
         Object.keys(process.env).filter((key) => key.startsWith("REACT_APP"))
       );
 
+      // First test if server is reachable
+      console.log("Testing server connectivity...");
+      try {
+        const testResponse = await fetch(`${serverUrl}/api/test`);
+        const testData = await testResponse.json();
+        console.log("Server test successful:", testData);
+      } catch (testError) {
+        console.error("Server connectivity test failed:", testError);
+        throw new Error(
+          "Cannot connect to server. Please ensure the server is running."
+        );
+      }
+
+      console.log("Making create-room request...");
       const response = await fetch(`${serverUrl}/api/create-room`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

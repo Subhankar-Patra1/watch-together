@@ -413,6 +413,55 @@ io.on("connection", (socket) => {
       isHost: room.host === socket.id,
     });
 
+    // SIMPLIFIED: Send voice chat notification to ALL new users if voice chat exists
+    if (room.voiceChat && room.voiceChat.active) {
+      console.log(
+        `🔔 FORCE sending voice chat notification to new user: ${username}`
+      );
+      console.log(
+        `Voice chat exists and is active - sending notification regardless`
+      );
+      console.log(`🔍 Debug info:`);
+      console.log(
+        `  - room.voiceChat.initiator: "${room.voiceChat.initiator}"`
+      );
+      console.log(
+        `  - room.voiceChat.members: [${room.voiceChat.members.join(", ")}]`
+      );
+      console.log(`  - new user joining: "${username}"`);
+
+      const initiatorUser = room.users.find(
+        (u) => u.username === room.voiceChat.initiator
+      );
+
+      console.log(`  - initiatorUser found: ${!!initiatorUser}`);
+      console.log(`  - initiatorUser.username: "${initiatorUser?.username}"`);
+      console.log(`  - initiatorUser.color: "${initiatorUser?.color}"`);
+
+      // Send immediately without delay
+      socket.emit("voice-chat-notification", {
+        initiator: room.voiceChat.initiator,
+        initiatorColor: initiatorUser ? initiatorUser.color : "#4ECDC4",
+        message: `${room.voiceChat.initiator} started Voice chat, want to join?`,
+      });
+
+      console.log(
+        `🔔 Notification sent with message: "${room.voiceChat.initiator} started Voice chat, want to join?"`
+      );
+
+      // Also send voice chat started event
+      socket.emit("voice-chat-started", {
+        initiator: room.voiceChat.initiator,
+        members: room.voiceChat.members,
+      });
+
+      console.log(`🔔 FORCED voice chat notification sent to ${username}`);
+    } else {
+      console.log(`🚫 No voice chat to notify ${username} about`);
+      console.log(`  - Voice chat exists: ${!!room.voiceChat}`);
+      console.log(`  - Voice chat active: ${room.voiceChat?.active}`);
+    }
+
     // If there's a video playing, send initial sync after a delay to ensure player is ready
     if (room.video && room.videoState) {
       setTimeout(() => {
@@ -630,6 +679,27 @@ io.on("connection", (socket) => {
     io.to(roomCode).emit("new-message", chatMessage);
   });
 
+  // Typing indicators
+  socket.on("typing-start", () => {
+    const roomCode = socket.roomCode;
+    if (roomCode && socket.username) {
+      socket.to(roomCode).emit("user-typing", {
+        username: socket.username,
+        isTyping: true,
+      });
+    }
+  });
+
+  socket.on("typing-stop", () => {
+    const roomCode = socket.roomCode;
+    if (roomCode && socket.username) {
+      socket.to(roomCode).emit("user-typing", {
+        username: socket.username,
+        isTyping: false,
+      });
+    }
+  });
+
   socket.on("send-reaction", ({ emoji }) => {
     const roomCode = socket.roomCode;
     const room = rooms.get(roomCode);
@@ -648,6 +718,206 @@ io.on("connection", (socket) => {
     io.to(roomCode).emit("new-reaction", reaction);
   });
 
+  // Voice Chat Events
+  socket.on("start-voice-chat", ({ username }) => {
+    const roomCode = socket.roomCode;
+    const room = rooms.get(roomCode);
+
+    if (!room) return;
+
+    const user = room.users.find((u) => u.id === socket.id);
+    if (!user) return;
+
+    // Initialize voice chat in room
+    room.voiceChat = {
+      active: true,
+      initiator: username,
+      initiatorSocketId: socket.id,
+      members: [username],
+      memberSockets: [socket.id],
+    };
+
+    // Add system message for voice chat start
+    const systemMessage = {
+      id: uuidv4(),
+      type: "system",
+      message: `${username} started a voice chat`,
+      timestamp: new Date().toISOString(),
+      icon: "🎤",
+    };
+    room.messages.push(systemMessage);
+    io.to(roomCode).emit("new-message", systemMessage);
+
+    // Send notification to all other users in the room
+    socket.to(roomCode).emit("voice-chat-notification", {
+      initiator: username,
+      initiatorColor: user.color,
+      message: `${username} started Voice chat, want to join?`,
+    });
+
+    // Confirm to initiator that voice chat started
+    socket.emit("voice-chat-started", {
+      initiator: username,
+      members: [username],
+    });
+
+    console.log(`🎤 ${username} started voice chat in room ${roomCode}`);
+  });
+
+  socket.on("join-voice-chat", ({ username }) => {
+    const roomCode = socket.roomCode;
+    const room = rooms.get(roomCode);
+
+    if (!room || !room.voiceChat || !room.voiceChat.active) return;
+
+    // Add user to voice chat
+    if (!room.voiceChat.members.includes(username)) {
+      // Get existing members with their socket IDs before adding new member
+      const existingMembers = room.voiceChat.memberSockets.map(
+        (socketId, index) => ({
+          username: room.voiceChat.members[index],
+          socketId: socketId,
+        })
+      );
+
+      room.voiceChat.members.push(username);
+      room.voiceChat.memberSockets.push(socket.id);
+
+      // Add system message for user joining voice chat
+      const systemMessage = {
+        id: uuidv4(),
+        type: "system",
+        message: `${username} joined the voice chat`,
+        timestamp: new Date().toISOString(),
+        icon: "🔊",
+      };
+      room.messages.push(systemMessage);
+      io.to(roomCode).emit("new-message", systemMessage);
+
+      // Notify all users in voice chat about new member
+      room.voiceChat.memberSockets.forEach((socketId) => {
+        io.to(socketId).emit("voice-chat-member-joined", {
+          newMember: username,
+          socketId: socket.id,
+          members: room.voiceChat.members,
+          existingMembers: socketId === socket.id ? existingMembers : undefined,
+        });
+      });
+
+      // Also broadcast to entire room to update voice chat status
+      io.to(roomCode).emit("voice-chat-member-updated", {
+        members: room.voiceChat.members,
+        action: "joined",
+        newMember: username,
+      });
+
+      // Send current voice chat state to the new joiner
+      socket.emit("voice-chat-started", {
+        initiator: room.voiceChat.initiator,
+        members: room.voiceChat.members,
+      });
+
+      console.log(`🎤 ${username} joined voice chat in room ${roomCode}`);
+      console.log(`🎤 Existing members:`, existingMembers);
+    }
+  });
+
+  socket.on("leave-voice-chat", ({ username }) => {
+    const roomCode = socket.roomCode;
+    const room = rooms.get(roomCode);
+
+    if (!room || !room.voiceChat || !room.voiceChat.active) return;
+
+    // Remove user from voice chat
+    const memberIndex = room.voiceChat.members.indexOf(username);
+    const socketIndex = room.voiceChat.memberSockets.indexOf(socket.id);
+
+    if (memberIndex > -1) {
+      room.voiceChat.members.splice(memberIndex, 1);
+    }
+    if (socketIndex > -1) {
+      room.voiceChat.memberSockets.splice(socketIndex, 1);
+    }
+
+    // Add system message for user leaving voice chat
+    const systemMessage = {
+      id: uuidv4(),
+      type: "system",
+      message: `${username} left the voice chat`,
+      timestamp: new Date().toISOString(),
+      icon: "🔇",
+    };
+    room.messages.push(systemMessage);
+    io.to(roomCode).emit("new-message", systemMessage);
+
+    // If no members left, end voice chat
+    if (room.voiceChat.members.length === 0) {
+      const endMessage = {
+        id: uuidv4(),
+        type: "system",
+        message: "Voice chat ended",
+        timestamp: new Date().toISOString(),
+        icon: "🎤",
+      };
+      room.messages.push(endMessage);
+      room.voiceChat = null;
+      io.to(roomCode).emit("new-message", endMessage);
+      io.to(roomCode).emit("voice-chat-ended");
+      console.log(`🎤 Voice chat ended in room ${roomCode} - no members left`);
+    } else {
+      // Notify remaining members
+      room.voiceChat.memberSockets.forEach((socketId) => {
+        io.to(socketId).emit("voice-chat-member-left", {
+          leftMember: username,
+          socketId: socket.id,
+          members: room.voiceChat.members,
+        });
+      });
+
+      // Also broadcast to entire room to update voice chat status
+      io.to(roomCode).emit("voice-chat-member-updated", {
+        members: room.voiceChat.members,
+        action: "left",
+        leftMember: username,
+      });
+
+      console.log(`🎤 ${username} left voice chat in room ${roomCode}`);
+    }
+  });
+
+  // WebRTC Signaling for Voice Chat
+  socket.on("voice-offer", ({ offer, targetSocketId }) => {
+    socket.to(targetSocketId).emit("voice-offer", {
+      offer,
+      fromSocketId: socket.id,
+    });
+  });
+
+  socket.on("voice-answer", ({ answer, targetSocketId }) => {
+    socket.to(targetSocketId).emit("voice-answer", {
+      answer,
+      fromSocketId: socket.id,
+    });
+  });
+
+  socket.on("voice-ice-candidate", ({ candidate, targetSocketId }) => {
+    socket.to(targetSocketId).emit("voice-ice-candidate", {
+      candidate,
+      fromSocketId: socket.id,
+    });
+  });
+
+  socket.on("voice-chat-mute-status", ({ username, isMuted }) => {
+    const roomCode = socket.roomCode;
+    if (roomCode) {
+      // Broadcast mute status to all room members except sender
+      socket.to(roomCode).emit("voice-chat-mute-status", {
+        username,
+        isMuted,
+      });
+    }
+  });
+
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
 
@@ -657,6 +927,47 @@ io.on("connection", (socket) => {
       if (room) {
         // Find the user before removing them
         const leavingUser = room.users.find((user) => user.id === socket.id);
+
+        // Handle voice chat cleanup
+        if (room.voiceChat && room.voiceChat.active) {
+          const memberIndex = room.voiceChat.memberSockets.indexOf(socket.id);
+          if (memberIndex > -1) {
+            // Remove from voice chat
+            const username = room.voiceChat.members[memberIndex];
+            room.voiceChat.members.splice(memberIndex, 1);
+            room.voiceChat.memberSockets.splice(memberIndex, 1);
+
+            // If no members left, end voice chat
+            if (room.voiceChat.members.length === 0) {
+              room.voiceChat = null;
+              io.to(roomCode).emit("voice-chat-ended");
+              console.log(
+                `🎤 Voice chat ended in room ${roomCode} - disconnection`
+              );
+            } else {
+              // Notify remaining members
+              room.voiceChat.memberSockets.forEach((socketId) => {
+                io.to(socketId).emit("voice-chat-member-left", {
+                  leftMember: username,
+                  socketId: socket.id,
+                  members: room.voiceChat.members,
+                });
+              });
+
+              // Also broadcast to entire room to update voice chat status
+              io.to(roomCode).emit("voice-chat-member-updated", {
+                members: room.voiceChat.members,
+                action: "left",
+                leftMember: username,
+              });
+
+              console.log(
+                `🎤 ${username} left voice chat due to disconnection`
+              );
+            }
+          }
+        }
+
         room.users = room.users.filter((user) => user.id !== socket.id);
 
         // Transfer host if needed

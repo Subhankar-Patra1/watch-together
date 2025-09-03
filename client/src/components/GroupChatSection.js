@@ -1,6 +1,8 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import FloatingReactions from "./FloatingReactions";
+import VoiceChat from "./VoiceChat";
+import VoiceChatStatus from "./VoiceChatStatus";
 
 const GroupChatSection = ({
   users,
@@ -14,8 +16,15 @@ const GroupChatSection = ({
 }) => {
   const [messageInput, setMessageInput] = useState("");
   const [reactions, setReactions] = useState([]);
+  const [voiceChatNotification, setVoiceChatNotification] = useState(null);
+  const [voiceChatData, setVoiceChatData] = useState({
+    activeVoiceChat: null,
+    voiceChatMembers: [],
+    mutedUsers: new Map(),
+  });
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const voiceChatRef = useRef(null);
 
   const emojis = ["😂", "❤️", "🔥", "😮", "👍", "👎", "😢", "😡"];
 
@@ -33,8 +42,32 @@ const GroupChatSection = ({
       }, 3000);
     });
 
+    // Listen for voice chat notifications
+    socket.on("voice-chat-notification", (notification) => {
+      console.log("🔔 Voice chat notification received:", notification);
+      setVoiceChatNotification(notification);
+
+      // Auto-hide notification after 30 seconds
+      setTimeout(() => {
+        setVoiceChatNotification(null);
+      }, 30000);
+    });
+
+    socket.on("voice-chat-started", () => {
+      console.log("🎤 Voice chat started event received");
+      setVoiceChatNotification(null);
+    });
+
+    // Test notification listener
+    socket.on("test-notification", (data) => {
+      console.log("Test notification received:", data);
+    });
+
     return () => {
       socket.off("new-reaction");
+      socket.off("voice-chat-notification");
+      socket.off("voice-chat-started");
+      socket.off("test-notification");
     };
   }, [socket]);
 
@@ -76,6 +109,30 @@ const GroupChatSection = ({
 
   const handleReaction = (emoji) => {
     onSendReaction(emoji);
+  };
+
+  const handleVoiceChatUpdate = useCallback((voiceChatData) => {
+    // Handle voice chat updates
+    console.log("Voice chat updated:", voiceChatData);
+    setVoiceChatData(
+      voiceChatData || {
+        activeVoiceChat: null,
+        voiceChatMembers: [],
+        mutedUsers: new Map(),
+      }
+    );
+  }, []);
+
+  const handleJoinVoiceChat = () => {
+    if (voiceChatNotification && voiceChatRef.current) {
+      // Call the VoiceChat component's joinVoiceChat method
+      voiceChatRef.current.joinVoiceChat();
+      setVoiceChatNotification(null);
+    }
+  };
+
+  const handleDismissVoiceNotification = () => {
+    setVoiceChatNotification(null);
   };
 
   const formatTime = (timestamp) => {
@@ -146,6 +203,15 @@ const GroupChatSection = ({
               );
             })}
           </div>
+
+          {/* Voice Chat Status Section */}
+          <VoiceChatStatus
+            activeVoiceChat={voiceChatData.activeVoiceChat}
+            voiceChatMembers={voiceChatData.voiceChatMembers}
+            mutedUsers={voiceChatData.mutedUsers}
+            users={users}
+            currentUsername={currentUsername}
+          />
 
           <div className="chat-messages">
             <AnimatePresence>
@@ -256,6 +322,44 @@ const GroupChatSection = ({
           )}
 
           <div className="chat-input-container">
+            {/* Voice Chat Notification */}
+            <AnimatePresence>
+              {voiceChatNotification && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="voice-chat-notification"
+                >
+                  <div className="notification-content">
+                    <span className="notification-icon">🎤</span>
+                    <span className="notification-text">
+                      <strong
+                        style={{ color: voiceChatNotification.initiatorColor }}
+                      >
+                        {voiceChatNotification.initiator}
+                      </strong>{" "}
+                      started Voice chat, want to join?
+                    </span>
+                  </div>
+                  <div className="notification-actions">
+                    <button
+                      className="join-voice-btn"
+                      onClick={handleJoinVoiceChat}
+                    >
+                      Join
+                    </button>
+                    <button
+                      className="dismiss-btn"
+                      onClick={handleDismissVoiceNotification}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <form onSubmit={handleSendMessage}>
               <div className="chat-input-row">
                 <textarea
@@ -272,6 +376,13 @@ const GroupChatSection = ({
                       handleSendMessage(e);
                     }
                   }}
+                />
+                <VoiceChat
+                  ref={voiceChatRef}
+                  socket={socket}
+                  currentUsername={currentUsername}
+                  users={users}
+                  onVoiceChatUpdate={handleVoiceChatUpdate}
                 />
                 <button type="submit" className="send-btn">
                   Send

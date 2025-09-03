@@ -11,6 +11,7 @@ import UniversalPlayer, {
 } from "./UniversalPlayer";
 import VideoCallSection from "./VideoCallSection";
 import GroupChatSection from "./GroupChatSection";
+import ResizablePanel from "./ResizablePanel";
 
 const RoomPage = ({
   socket,
@@ -514,7 +515,7 @@ const RoomPage = ({
         </div>
       </div>
 
-      <div className="right-sidebar">
+      <ResizablePanel className="right-sidebar">
         <div className="sidebar-tabs">
           <button
             className={`tab-btn ${
@@ -552,7 +553,7 @@ const RoomPage = ({
             <VideoCallSection />
           )}
         </div>
-      </div>
+      </ResizablePanel>
 
       {/* Host Transfer Popup */}
       {showHostTransferPopup && (

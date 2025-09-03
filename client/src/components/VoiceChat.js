@@ -84,14 +84,17 @@ const VoiceChat = forwardRef(
             data.newMember !== currentUsername &&
             isInVoiceChat &&
             localStream &&
-            !peerConnections.has(data.socketId) // Only if we don't already have a connection
+            !peerConnections.has(data.socketId) && // Only if we don't already have a connection
+            socket.id < data.socketId // Only initiate if I have smaller socket ID
           ) {
             // Check if we haven't already attempted this connection recently
             const lastAttempt = connectionAttempts.get(connectionKey);
             const now = Date.now();
             if (!lastAttempt || now - lastAttempt > 5000) {
               // 5 second debounce
-              console.log("Initiating connection to new peer:", data.socketId);
+              console.log(
+                `Initiating connection to new peer ${data.newMember} (${data.socketId}) - I have smaller socket ID`
+              );
               setConnectionAttempts(
                 (prev) => new Map(prev.set(connectionKey, now))
               );
@@ -102,6 +105,15 @@ const VoiceChat = forwardRef(
                 connectionKey
               );
             }
+          } else if (
+            data.newMember !== currentUsername &&
+            isInVoiceChat &&
+            localStream &&
+            socket.id > data.socketId
+          ) {
+            console.log(
+              `Not initiating connection to ${data.newMember} (${data.socketId}) - they should initiate (larger socket ID)`
+            );
           }
 
           // If I'm the new member, I need to connect to existing members
@@ -117,17 +129,30 @@ const VoiceChat = forwardRef(
             data.existingMembers.forEach((member) => {
               if (
                 member.socketId !== socket.id &&
-                !peerConnections.has(member.socketId)
+                !peerConnections.has(member.socketId) &&
+                socket.id < member.socketId // Only initiate if I have smaller socket ID
               ) {
                 const memberConnectionKey = `${member.username}-${member.socketId}`;
                 const lastAttempt = connectionAttempts.get(memberConnectionKey);
                 const now = Date.now();
                 if (!lastAttempt || now - lastAttempt > 5000) {
+                  console.log(
+                    `Initiating connection to ${member.username} (${member.socketId}) - I have smaller socket ID`
+                  );
                   setConnectionAttempts(
                     (prev) => new Map(prev.set(memberConnectionKey, now))
                   );
                   handleNewPeerJoined(member.username, member.socketId);
+                } else {
+                  console.log(
+                    "Skipping connection attempt - too recent:",
+                    memberConnectionKey
+                  );
                 }
+              } else if (member.socketId !== socket.id && socket.id > member.socketId) {
+                console.log(
+                  `Not initiating connection to ${member.username} (${member.socketId}) - they should initiate (larger socket ID)`
+                );
               }
             });
           }
@@ -653,6 +678,16 @@ const VoiceChat = forwardRef(
         "isInVoiceChat:",
         isInVoiceChat
       );
+
+      // Implement deterministic connection initiation rule
+      // Only the peer with the smaller socket ID should initiate connections
+      // This prevents both peers from trying to connect simultaneously
+      if (socket.id < data.fromSocketId) {
+        console.log(
+          `I have smaller socket ID (${socket.id} < ${data.fromSocketId}), I should initiate. Ignoring incoming offer.`
+        );
+        return;
+      }
 
       // Check if we already have a connection to this peer
       const existingConnection = peerConnections.get(data.fromSocketId);

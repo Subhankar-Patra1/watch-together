@@ -19,11 +19,11 @@ const VoiceChat = forwardRef(
     const [debugInfo, setDebugInfo] = useState("");
     const [pendingOffers, setPendingOffers] = useState([]);
     const [pendingIceCandidates, setPendingIceCandidates] = useState(new Map());
-  const [isMuted, setIsMuted] = useState(false);
-  const [mutedUsers, setMutedUsers] = useState(new Map());
-  const [connectionAttempts, setConnectionAttempts] = useState(new Map()); // Track connection attempts
+    const [isMuted, setIsMuted] = useState(false);
+    const [mutedUsers, setMutedUsers] = useState(new Map());
+    const [connectionAttempts, setConnectionAttempts] = useState(new Map()); // Track connection attempts
 
-  const remoteAudioRefs = useRef(new Map());    // WebRTC configuration
+    const remoteAudioRefs = useRef(new Map()); // WebRTC configuration
     const rtcConfig = {
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
@@ -77,7 +77,7 @@ const VoiceChat = forwardRef(
 
         // Debounce connection attempts to prevent race conditions
         const connectionKey = `${data.newMember}-${data.socketId}`;
-        
+
         // Use a timeout to ensure local stream is ready and prevent duplicate connections
         setTimeout(() => {
           if (
@@ -89,12 +89,18 @@ const VoiceChat = forwardRef(
             // Check if we haven't already attempted this connection recently
             const lastAttempt = connectionAttempts.get(connectionKey);
             const now = Date.now();
-            if (!lastAttempt || now - lastAttempt > 5000) { // 5 second debounce
+            if (!lastAttempt || now - lastAttempt > 5000) {
+              // 5 second debounce
               console.log("Initiating connection to new peer:", data.socketId);
-              setConnectionAttempts(prev => new Map(prev.set(connectionKey, now)));
+              setConnectionAttempts(
+                (prev) => new Map(prev.set(connectionKey, now))
+              );
               handleNewPeerJoined(data.newMember, data.socketId);
             } else {
-              console.log("Skipping connection attempt - too recent:", connectionKey);
+              console.log(
+                "Skipping connection attempt - too recent:",
+                connectionKey
+              );
             }
           }
 
@@ -109,12 +115,17 @@ const VoiceChat = forwardRef(
               data.existingMembers
             );
             data.existingMembers.forEach((member) => {
-              if (member.socketId !== socket.id && !peerConnections.has(member.socketId)) {
+              if (
+                member.socketId !== socket.id &&
+                !peerConnections.has(member.socketId)
+              ) {
                 const memberConnectionKey = `${member.username}-${member.socketId}`;
                 const lastAttempt = connectionAttempts.get(memberConnectionKey);
                 const now = Date.now();
                 if (!lastAttempt || now - lastAttempt > 5000) {
-                  setConnectionAttempts(prev => new Map(prev.set(memberConnectionKey, now)));
+                  setConnectionAttempts(
+                    (prev) => new Map(prev.set(memberConnectionKey, now))
+                  );
                   handleNewPeerJoined(member.username, member.socketId);
                 }
               }
@@ -251,7 +262,7 @@ const VoiceChat = forwardRef(
       if (!candidates || candidates.length === 0) return;
 
       const peerConnection = peerConnections.get(socketId);
-      if (!peerConnection || peerConnection.signalingState === 'closed') {
+      if (!peerConnection || peerConnection.signalingState === "closed") {
         console.log(
           "Cannot process ICE candidates - no peer connection or connection closed for",
           socketId
@@ -265,7 +276,10 @@ const VoiceChat = forwardRef(
         return;
       }
 
-      if (!peerConnection.remoteDescription || !peerConnection.remoteDescription.type) {
+      if (
+        !peerConnection.remoteDescription ||
+        !peerConnection.remoteDescription.type
+      ) {
         console.log(
           "Cannot process ICE candidates - no remote description for",
           socketId
@@ -282,9 +296,12 @@ const VoiceChat = forwardRef(
 
       for (const candidateData of candidates) {
         try {
-          if (peerConnection.signalingState !== 'closed') {
+          if (peerConnection.signalingState !== "closed") {
             await peerConnection.addIceCandidate(candidateData.candidate);
-            console.log("Successfully added pending ICE candidate for", socketId);
+            console.log(
+              "Successfully added pending ICE candidate for",
+              socketId
+            );
           } else {
             console.log("Skipping ICE candidate - connection closed");
             break;
@@ -399,16 +416,40 @@ const VoiceChat = forwardRef(
     };
 
     const endVoiceChat = () => {
+      console.log("🚪 Ending voice chat, cleaning up all connections");
+      
       // Clean up local stream
       if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
+        localStream.getTracks().forEach((track) => {
+          track.stop();
+          console.log("Stopped local track:", track.kind);
+        });
         setLocalStream(null);
       }
 
-      // Clean up peer connections
-      peerConnections.forEach((pc) => pc.close());
+      // Clean up all peer connections
+      peerConnections.forEach((pc, socketId) => {
+        console.log("Closing peer connection to", socketId);
+        if (pc.connectionState !== "closed") {
+          pc.close();
+        }
+      });
       setPeerConnections(new Map());
+      
+      // Clean up remote streams
       setRemoteStreams(new Map());
+      
+      // Clear all pending data
+      setPendingIceCandidates(new Map());
+      setPendingOffers([]);
+      setConnectionAttempts(new Map());
+      
+      // Reset states
+      setActiveVoiceChat(null);
+      setVoiceChatMembers([]);
+      setMutedUsers(new Map());
+      setIsMuted(false);
+      setDebugInfo("");
     };
 
     const toggleMute = () => {
@@ -430,369 +471,426 @@ const VoiceChat = forwardRef(
       }
     };
 
-  const handleNewPeerJoined = async (username, socketId) => {
-    if (!localStream) {
-      console.error("No local stream available for peer connection");
-      return;
-    }
+    const handleNewPeerJoined = async (username, socketId) => {
+      if (!localStream) {
+        console.error("No local stream available for peer connection");
+        return;
+      }
 
-    // Check if we already have a connection to this peer
-    if (peerConnections.has(socketId)) {
-      console.log(`Already have connection to ${socketId}, skipping`);
-      return;
-    }
-
-    console.log(`🔄 Creating peer connection for ${username} (${socketId})`);
-
-    try {
-      const peerConnection = new RTCPeerConnection(rtcConfig);
-
-      // Add to connections map immediately to prevent duplicates
-      setPeerConnections((prev) => new Map(prev.set(socketId, peerConnection)));
-
-      // Add transceiver for audio to ensure we can receive audio
-      peerConnection.addTransceiver("audio", { direction: "sendrecv" });
-
-      // Add local stream to peer connection
-      localStream.getTracks().forEach((track) => {
-        console.log(
-          "Adding track to peer connection:",
-          track.kind,
-          track.enabled
-        );
-        peerConnection.addTrack(track, localStream);
-      });
-
-      // Handle remote stream
-      peerConnection.ontrack = (event) => {
-        console.log("🎵 Received remote track from", socketId, event);
-        const [remoteStream] = event.streams;
-        console.log(
-          "Remote stream tracks:",
-          remoteStream
-            .getTracks()
-            .map((t) => ({ kind: t.kind, enabled: t.enabled }))
-        );
-
-        setRemoteStreams((prev) => {
-          const newMap = new Map(prev);
-          newMap.set(socketId, remoteStream);
-          console.log(
-            "🎵 Updated remote streams map:",
-            newMap.size,
-            "streams"
-          );
-          return newMap;
-        });
-
-        setDebugInfo(`🎵 Sending audio to ${socketId}`);
-      };
-
-      // Handle ICE candidates
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate && peerConnection.signalingState !== 'closed') {
-          console.log("Sending ICE candidate to", socketId);
-          socket.emit("voice-ice-candidate", {
-            candidate: event.candidate,
-            targetSocketId: socketId,
-          });
-        }
-      };
-
-      // Connection state monitoring
-      peerConnection.onconnectionstatechange = () => {
-        console.log(
-          `🔗 Connection state with ${socketId}:`,
-          peerConnection.connectionState
-        );
-        setDebugInfo(`Connection: ${peerConnection.connectionState}`);
-
-        // Clean up if connection failed or closed
-        if (peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'closed') {
+      // Check if we already have a connection to this peer
+      const existingConnection = peerConnections.get(socketId);
+      if (existingConnection) {
+        // If connection is closed, clean it up first
+        if (existingConnection.connectionState === "closed" || 
+            existingConnection.signalingState === "closed") {
+          console.log(`Cleaning up closed connection to ${socketId} before creating new one`);
           handlePeerLeft(socketId);
-        }
-      };
-
-      // Signaling state monitoring
-      peerConnection.onsignalingstatechange = () => {
-        console.log(
-          `📡 Signaling state with ${socketId}:`,
-          peerConnection.signalingState
-        );
-      };
-
-      // Create and send offer
-      const offer = await peerConnection.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: false,
-      });
-      await peerConnection.setLocalDescription(offer);
-
-      console.log("📤 Sending offer to", socketId);
-      socket.emit("voice-offer", {
-        offer,
-        targetSocketId: socketId,
-      });
-
-      // Process any pending ICE candidates for this peer
-      setTimeout(() => processPendingIceCandidates(socketId), 500);
-    } catch (error) {
-      console.error("Error handling new peer:", error);
-      // Clean up on error
-      setPeerConnections((prev) => {
-        const newMap = new Map(prev);
-        newMap.delete(socketId);
-        return newMap;
-      });
-    }
-  };
-
-  const handlePeerLeft = (socketId) => {
-    console.log(`🚪 Peer ${socketId} left, cleaning up connection`);
-    
-    const peerConnection = peerConnections.get(socketId);
-    if (peerConnection) {
-      peerConnection.close();
-      setPeerConnections((prev) => {
-        const newMap = new Map(prev);
-        newMap.delete(socketId);
-        return newMap;
-      });
-    }
-
-    setRemoteStreams((prev) => {
-      const newMap = new Map(prev);
-      newMap.delete(socketId);
-      return newMap;
-    });
-
-    // Clean up pending ICE candidates for this peer
-    setPendingIceCandidates((prev) => {
-      const newMap = new Map(prev);
-      newMap.delete(socketId);
-      return newMap;
-    });
-  };
-
-  const handleOffer = async (data) => {
-    console.log("Received offer from", data.fromSocketId);
-    console.log(
-      "Current state - localStream:",
-      !!localStream,
-      "isInVoiceChat:",
-      isInVoiceChat
-    );
-
-    // Check if we already have a connection to this peer
-    if (peerConnections.has(data.fromSocketId)) {
-      console.log(`Already have connection to ${data.fromSocketId}, ignoring offer`);
-      return;
-    }
-
-    // If we don't have local stream yet, wait a bit and retry
-    if (!localStream) {
-      console.log("No local stream yet, waiting...");
-      setTimeout(() => {
-        if (localStream) {
-          console.log("Retrying handleOffer with local stream");
-          handleOffer(data);
         } else {
-          console.error("Still no local stream after wait");
+          console.log(`Already have active connection to ${socketId}, skipping`);
+          return;
         }
-      }, 500);
-      return;
-    }
+      }
 
-    try {
-      const peerConnection = new RTCPeerConnection(rtcConfig);
+      console.log(`🔄 Creating peer connection for ${username} (${socketId})`);
 
-      // Add to connections map immediately to prevent duplicates
-      setPeerConnections((prev) => new Map(prev.set(data.fromSocketId, peerConnection)));
+      try {
+        const peerConnection = new RTCPeerConnection(rtcConfig);
 
-      // Add transceiver for audio to ensure we can receive audio
-      peerConnection.addTransceiver("audio", { direction: "sendrecv" });
-
-      // Add local stream to peer connection
-      localStream.getTracks().forEach((track) => {
-        console.log(
-          "Adding local track to answer peer connection:",
-          track.kind,
-          track.enabled
-        );
-        peerConnection.addTrack(track, localStream);
-      });
-
-      // Handle remote stream
-      peerConnection.ontrack = (event) => {
-        console.log(
-          "🎵 Received remote track in offer handler from",
-          data.fromSocketId,
-          event
-        );
-        const [remoteStream] = event.streams;
-        console.log(
-          "Remote stream tracks:",
-          remoteStream
-            .getTracks()
-            .map((t) => ({ kind: t.kind, enabled: t.enabled }))
+        // Add to connections map immediately to prevent duplicates
+        setPeerConnections(
+          (prev) => new Map(prev.set(socketId, peerConnection))
         );
 
-        setRemoteStreams((prev) => {
-          const newMap = new Map(prev);
-          newMap.set(data.fromSocketId, remoteStream);
+        // Add transceiver for audio to ensure we can receive audio
+        peerConnection.addTransceiver("audio", { direction: "sendrecv" });
+
+        // Add local stream to peer connection
+        localStream.getTracks().forEach((track) => {
           console.log(
-            "🎵 Updated remote streams map in offer handler:",
-            newMap.size,
-            "streams"
+            "Adding track to peer connection:",
+            track.kind,
+            track.enabled
           );
-          return newMap;
+          peerConnection.addTrack(track, localStream);
         });
 
-        setDebugInfo(`🎵 Receiving audio from ${data.fromSocketId}`);
-      };
-
-      // Handle ICE candidates
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate && peerConnection.signalingState !== 'closed') {
+        // Handle remote stream
+        peerConnection.ontrack = (event) => {
+          console.log("🎵 Received remote track from", socketId, event);
+          const [remoteStream] = event.streams;
           console.log(
-            "Sending ICE candidate in response to",
-            data.fromSocketId
+            "Remote stream tracks:",
+            remoteStream
+              .getTracks()
+              .map((t) => ({ kind: t.kind, enabled: t.enabled }))
           );
-          socket.emit("voice-ice-candidate", {
-            candidate: event.candidate,
-            targetSocketId: data.fromSocketId,
+
+          setRemoteStreams((prev) => {
+            const newMap = new Map(prev);
+            newMap.set(socketId, remoteStream);
+            console.log(
+              "🎵 Updated remote streams map:",
+              newMap.size,
+              "streams"
+            );
+            return newMap;
           });
-        }
-      };
 
-      // Connection state monitoring
-      peerConnection.onconnectionstatechange = () => {
-        console.log(
-          `🔗 Connection state with ${data.fromSocketId}:`,
-          peerConnection.connectionState
-        );
-        setDebugInfo(`Connection: ${peerConnection.connectionState}`);
+          setDebugInfo(`🎵 Sending audio to ${socketId}`);
+        };
 
-        // Clean up if connection failed or closed
-        if (peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'closed') {
-          handlePeerLeft(data.fromSocketId);
-        }
-      };
+        // Handle ICE candidates
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate && peerConnection.signalingState !== "closed") {
+            console.log("Sending ICE candidate to", socketId);
+            socket.emit("voice-ice-candidate", {
+              candidate: event.candidate,
+              targetSocketId: socketId,
+            });
+          }
+        };
 
-      // Signaling state monitoring
-      peerConnection.onsignalingstatechange = () => {
-        console.log(
-          `📡 Signaling state with ${data.fromSocketId}:`,
-          peerConnection.signalingState
-        );
-      };
-
-      // Set remote description and create answer
-      await peerConnection.setRemoteDescription(data.offer);
-      console.log("Remote description set for offer from", data.fromSocketId);
-
-      const answer = await peerConnection.createAnswer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: false,
-      });
-      await peerConnection.setLocalDescription(answer);
-
-      console.log("Sending answer to", data.fromSocketId);
-      socket.emit("voice-answer", {
-        answer,
-        targetSocketId: data.fromSocketId,
-      });
-
-      // Process any pending ICE candidates for this peer after remote description is set
-      setTimeout(() => processPendingIceCandidates(data.fromSocketId), 500);
-    } catch (error) {
-      console.error("Error handling offer:", error);
-      setDebugInfo(`Error: ${error.message}`);
-      // Clean up on error
-      setPeerConnections((prev) => {
-        const newMap = new Map(prev);
-        newMap.delete(data.fromSocketId);
-        return newMap;
-      });
-    }
-  };
-
-  const handleAnswer = async (data) => {
-    console.log("Received answer from", data.fromSocketId);
-    try {
-      const peerConnection = peerConnections.get(data.fromSocketId);
-      if (peerConnection && peerConnection.signalingState !== 'closed') {
-        if (peerConnection.signalingState === 'have-local-offer') {
-          await peerConnection.setRemoteDescription(data.answer);
+        // Connection state monitoring
+        peerConnection.onconnectionstatechange = () => {
           console.log(
-            "Successfully set remote description for answer from",
-            data.fromSocketId
+            `🔗 Connection state with ${socketId}:`,
+            peerConnection.connectionState
           );
+          setDebugInfo(`Connection: ${peerConnection.connectionState}`);
 
-          // Process any pending ICE candidates now that remote description is set
-          setTimeout(() => processPendingIceCandidates(data.fromSocketId), 500);
-        } else {
-          console.warn(
-            `Ignoring answer from ${data.fromSocketId} - wrong signaling state:`,
+          // Clean up if connection failed or closed
+          if (
+            peerConnection.connectionState === "failed" ||
+            peerConnection.connectionState === "closed"
+          ) {
+            console.log(`Connection to ${socketId} ${peerConnection.connectionState}, cleaning up`);
+            handlePeerLeft(socketId);
+          }
+        };
+
+        // Signaling state monitoring
+        peerConnection.onsignalingstatechange = () => {
+          console.log(
+            `📡 Signaling state with ${socketId}:`,
             peerConnection.signalingState
           );
-        }
-      } else {
-        console.error("No valid peer connection found for", data.fromSocketId);
-      }
-    } catch (error) {
-      console.error("Error handling answer:", error);
-    }
-  };
+        };
 
-  const handleIceCandidate = async (data) => {
-    console.log("Received ICE candidate from", data.fromSocketId);
-    try {
-      const peerConnection = peerConnections.get(data.fromSocketId);
-      if (peerConnection && peerConnection.signalingState !== 'closed') {
-        // Check if remote description is set before adding ICE candidate
-        if (peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
-          await peerConnection.addIceCandidate(data.candidate);
-          console.log(
-            "Successfully added ICE candidate from",
-            data.fromSocketId
-          );
-        } else {
-          console.log(
-            "Remote description not set yet, queuing ICE candidate for",
-            data.fromSocketId
-          );
-          // Queue the ICE candidate until remote description is set
-          setPendingIceCandidates((prev) => {
-            const newMap = new Map(prev);
-            const existing = newMap.get(data.fromSocketId) || [];
-            newMap.set(data.fromSocketId, [...existing, data]);
-            return newMap;
-          });
+        // Create and send offer
+        const offer = await peerConnection.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: false,
+        });
+        await peerConnection.setLocalDescription(offer);
+
+        console.log("📤 Sending offer to", socketId);
+        socket.emit("voice-offer", {
+          offer,
+          targetSocketId: socketId,
+        });
+
+        // Process any pending ICE candidates for this peer
+        setTimeout(() => processPendingIceCandidates(socketId), 500);
+      } catch (error) {
+        console.error("Error handling new peer:", error);
+        // Clean up on error
+        setPeerConnections((prev) => {
+          const newMap = new Map(prev);
+          newMap.delete(socketId);
+          return newMap;
+        });
+      }
+    };
+
+    const handlePeerLeft = (socketId) => {
+      console.log(`🚪 Peer ${socketId} left, cleaning up connection`);
+
+      const peerConnection = peerConnections.get(socketId);
+      if (peerConnection) {
+        // Close the connection if it's not already closed
+        if (peerConnection.connectionState !== "closed") {
+          peerConnection.close();
         }
-      } else {
-        if (!peerConnection) {
-          console.error(
-            "No peer connection found for ICE candidate from",
-            data.fromSocketId
-          );
-          // Queue for when peer connection is created
-          setPendingIceCandidates((prev) => {
-            const newMap = new Map(prev);
-            const existing = newMap.get(data.fromSocketId) || [];
-            newMap.set(data.fromSocketId, [...existing, data]);
-            return newMap;
-          });
+        setPeerConnections((prev) => {
+          const newMap = new Map(prev);
+          newMap.delete(socketId);
+          return newMap;
+        });
+      }
+
+      // Clean up remote streams
+      setRemoteStreams((prev) => {
+        const newMap = new Map(prev);
+        newMap.delete(socketId);
+        return newMap;
+      });
+
+      // Clean up pending ICE candidates for this peer
+      setPendingIceCandidates((prev) => {
+        const newMap = new Map(prev);
+        newMap.delete(socketId);
+        return newMap;
+      });
+
+      // Clear connection attempts for this peer
+      setConnectionAttempts((prev) => {
+        const newMap = new Map(prev);
+        // Remove any attempts for this socket ID
+        for (const [key, value] of newMap.entries()) {
+          if (key.includes(socketId)) {
+            newMap.delete(key);
+          }
+        }
+        return newMap;
+      });
+    };
+
+    const handleOffer = async (data) => {
+      console.log("Received offer from", data.fromSocketId);
+      console.log(
+        "Current state - localStream:",
+        !!localStream,
+        "isInVoiceChat:",
+        isInVoiceChat
+      );
+
+      // Check if we already have a connection to this peer
+      const existingConnection = peerConnections.get(data.fromSocketId);
+      if (existingConnection) {
+        // If connection is closed, clean it up first
+        if (existingConnection.connectionState === "closed" || 
+            existingConnection.signalingState === "closed") {
+          console.log(`Cleaning up closed connection to ${data.fromSocketId} before handling new offer`);
+          handlePeerLeft(data.fromSocketId);
         } else {
-          console.warn(
-            `Ignoring ICE candidate from ${data.fromSocketId} - connection closed`
+          console.log(
+            `Already have active connection to ${data.fromSocketId}, ignoring offer`
           );
+          return;
         }
       }
-    } catch (error) {
-      console.error("Error handling ICE candidate:", error);
-    }
-  };    // Auto-play remote audio streams
+
+      // If we don't have local stream yet, wait a bit and retry
+      if (!localStream) {
+        console.log("No local stream yet, waiting...");
+        setTimeout(() => {
+          if (localStream) {
+            console.log("Retrying handleOffer with local stream");
+            handleOffer(data);
+          } else {
+            console.error("Still no local stream after wait");
+          }
+        }, 500);
+        return;
+      }
+
+      try {
+        const peerConnection = new RTCPeerConnection(rtcConfig);
+
+        // Add to connections map immediately to prevent duplicates
+        setPeerConnections(
+          (prev) => new Map(prev.set(data.fromSocketId, peerConnection))
+        );
+
+        // Add transceiver for audio to ensure we can receive audio
+        peerConnection.addTransceiver("audio", { direction: "sendrecv" });
+
+        // Add local stream to peer connection
+        localStream.getTracks().forEach((track) => {
+          console.log(
+            "Adding local track to answer peer connection:",
+            track.kind,
+            track.enabled
+          );
+          peerConnection.addTrack(track, localStream);
+        });
+
+        // Handle remote stream
+        peerConnection.ontrack = (event) => {
+          console.log(
+            "🎵 Received remote track in offer handler from",
+            data.fromSocketId,
+            event
+          );
+          const [remoteStream] = event.streams;
+          console.log(
+            "Remote stream tracks:",
+            remoteStream
+              .getTracks()
+              .map((t) => ({ kind: t.kind, enabled: t.enabled }))
+          );
+
+          setRemoteStreams((prev) => {
+            const newMap = new Map(prev);
+            newMap.set(data.fromSocketId, remoteStream);
+            console.log(
+              "🎵 Updated remote streams map in offer handler:",
+              newMap.size,
+              "streams"
+            );
+            return newMap;
+          });
+
+          setDebugInfo(`🎵 Receiving audio from ${data.fromSocketId}`);
+        };
+
+        // Handle ICE candidates
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate && peerConnection.signalingState !== "closed") {
+            console.log(
+              "Sending ICE candidate in response to",
+              data.fromSocketId
+            );
+            socket.emit("voice-ice-candidate", {
+              candidate: event.candidate,
+              targetSocketId: data.fromSocketId,
+            });
+          }
+        };
+
+        // Connection state monitoring
+        peerConnection.onconnectionstatechange = () => {
+          console.log(
+            `🔗 Connection state with ${data.fromSocketId}:`,
+            peerConnection.connectionState
+          );
+          setDebugInfo(`Connection: ${peerConnection.connectionState}`);
+
+          // Clean up if connection failed or closed
+          if (
+            peerConnection.connectionState === "failed" ||
+            peerConnection.connectionState === "closed"
+          ) {
+            handlePeerLeft(data.fromSocketId);
+          }
+        };
+
+        // Signaling state monitoring
+        peerConnection.onsignalingstatechange = () => {
+          console.log(
+            `📡 Signaling state with ${data.fromSocketId}:`,
+            peerConnection.signalingState
+          );
+        };
+
+        // Set remote description and create answer
+        await peerConnection.setRemoteDescription(data.offer);
+        console.log("Remote description set for offer from", data.fromSocketId);
+
+        const answer = await peerConnection.createAnswer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: false,
+        });
+        await peerConnection.setLocalDescription(answer);
+
+        console.log("Sending answer to", data.fromSocketId);
+        socket.emit("voice-answer", {
+          answer,
+          targetSocketId: data.fromSocketId,
+        });
+
+        // Process any pending ICE candidates for this peer after remote description is set
+        setTimeout(() => processPendingIceCandidates(data.fromSocketId), 500);
+      } catch (error) {
+        console.error("Error handling offer:", error);
+        setDebugInfo(`Error: ${error.message}`);
+        // Clean up on error
+        setPeerConnections((prev) => {
+          const newMap = new Map(prev);
+          newMap.delete(data.fromSocketId);
+          return newMap;
+        });
+      }
+    };
+
+    const handleAnswer = async (data) => {
+      console.log("Received answer from", data.fromSocketId);
+      try {
+        const peerConnection = peerConnections.get(data.fromSocketId);
+        if (peerConnection && peerConnection.signalingState !== "closed") {
+          if (peerConnection.signalingState === "have-local-offer") {
+            await peerConnection.setRemoteDescription(data.answer);
+            console.log(
+              "Successfully set remote description for answer from",
+              data.fromSocketId
+            );
+
+            // Process any pending ICE candidates now that remote description is set
+            setTimeout(
+              () => processPendingIceCandidates(data.fromSocketId),
+              500
+            );
+          } else {
+            console.warn(
+              `Ignoring answer from ${data.fromSocketId} - wrong signaling state:`,
+              peerConnection.signalingState
+            );
+          }
+        } else {
+          console.error(
+            "No valid peer connection found for",
+            data.fromSocketId
+          );
+        }
+      } catch (error) {
+        console.error("Error handling answer:", error);
+      }
+    };
+
+    const handleIceCandidate = async (data) => {
+      console.log("Received ICE candidate from", data.fromSocketId);
+      try {
+        const peerConnection = peerConnections.get(data.fromSocketId);
+        if (peerConnection && peerConnection.signalingState !== "closed") {
+          // Check if remote description is set before adding ICE candidate
+          if (
+            peerConnection.remoteDescription &&
+            peerConnection.remoteDescription.type
+          ) {
+            await peerConnection.addIceCandidate(data.candidate);
+            console.log(
+              "Successfully added ICE candidate from",
+              data.fromSocketId
+            );
+          } else {
+            console.log(
+              "Remote description not set yet, queuing ICE candidate for",
+              data.fromSocketId
+            );
+            // Queue the ICE candidate until remote description is set
+            setPendingIceCandidates((prev) => {
+              const newMap = new Map(prev);
+              const existing = newMap.get(data.fromSocketId) || [];
+              newMap.set(data.fromSocketId, [...existing, data]);
+              return newMap;
+            });
+          }
+        } else {
+          if (!peerConnection) {
+            console.log(
+              "No peer connection found for ICE candidate from",
+              data.fromSocketId,
+              "- queueing for later"
+            );
+            // Queue for when peer connection is created
+            setPendingIceCandidates((prev) => {
+              const newMap = new Map(prev);
+              const existing = newMap.get(data.fromSocketId) || [];
+              newMap.set(data.fromSocketId, [...existing, data]);
+              return newMap;
+            });
+          } else {
+            // Silently ignore ICE candidates for closed connections - this is normal
+            console.log(
+              `Ignoring ICE candidate from ${data.fromSocketId} - connection closed`
+            );
+            return;
+          }
+        }
+      } catch (error) {
+        console.error("Error handling ICE candidate:", error);
+      }
+    }; // Auto-play remote audio streams
     useEffect(() => {
       console.log("🔊 Remote streams updated:", remoteStreams.size, "streams");
       remoteStreams.forEach((stream, socketId) => {

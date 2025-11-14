@@ -36,28 +36,177 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
     }
   }, [forceStop, isSharing, handleStopScreenShare]);
 
+  // WebRTC state for receiving screen shares
+  const [peerConnection, setPeerConnection] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
+
+  // Create WebRTC connection for receiving screen shares
+  const createReceiverConnection = useCallback(async (sharerSocketId) => {
+    console.log('🔗 Creating WebRTC connection to receive screen share from:', sharerSocketId);
+    
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+
+    // Handle incoming stream
+    pc.ontrack = (event) => {
+      console.log('🎥 Received screen share stream!');
+      const stream = event.streams[0];
+      setRemoteStream(stream);
+      
+      // Show the actual screen share stream
+      if (onScreenShare) {
+        onScreenShare({
+          type: 'screen-share',
+          stream: stream,
+          username: 'Remote Screen Share',
+          isRemote: true
+        });
+      }
+    };
+
+    // Handle ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit('webrtc-ice-candidate', {
+          roomCode,
+          to: sharerSocketId,
+          from: socket.id,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    setPeerConnection(pc);
+    return pc;
+  }, [socket, roomCode, onScreenShare]);
+
+  // Create WebRTC connection for sending screen shares
+  const createSenderConnection = useCallback(async (receiverSocketId, stream) => {
+    console.log('📤 Creating WebRTC connection to send screen share to:', receiverSocketId);
+    
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+
+    // Add screen share stream to connection
+    stream.getTracks().forEach(track => {
+      pc.addTrack(track, stream);
+    });
+
+    // Handle ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit('webrtc-ice-candidate', {
+          roomCode,
+          to: receiverSocketId,
+          from: socket.id,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    return pc;
+  }, [socket, roomCode]);
+
   useEffect(() => {
-    // Simple socket listeners for screen sharing events
-    socket.on('screen-share-started', (data) => {
+    // WebRTC signaling for screen sharing
+    socket.on('screen-share-started', async (data) => {
       console.log('🎬 Screen share started by:', data.username);
-      // If it's not our own screen share, show the remote screen share
+      
       if (data.username !== username) {
-        console.log('🖥️ Showing remote screen share from:', data.username);
-        if (onScreenShare) {
-          onScreenShare({
-            type: 'screen-share',
-            stream: data.stream, // This will be handled by the server
-            username: data.username,
-            isRemote: true,
-            socketId: data.socketId
+        console.log('📡 Requesting WebRTC connection for screen share');
+        // Request WebRTC connection to receive screen share
+        socket.emit('request-screen-share-webrtc', {
+          roomCode,
+          to: data.socketId,
+          from: socket.id
+        });
+      }
+    });
+
+    socket.on('request-screen-share-webrtc', async (data) => {
+      console.log('📞 WebRTC screen share requested by:', data.from);
+      
+      if (isSharing && sharedStream) {
+        try {
+          const pc = await createSenderConnection(data.from, sharedStream);
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          
+          socket.emit('webrtc-offer', {
+            roomCode,
+            to: data.from,
+            from: socket.id,
+            offer: offer
           });
+        } catch (error) {
+          console.error('❌ Error creating WebRTC offer:', error);
+        }
+      }
+    });
+
+    socket.on('webrtc-offer', async (data) => {
+      console.log('📥 Received WebRTC offer from:', data.from);
+      
+      try {
+        const pc = await createReceiverConnection(data.from);
+        await pc.setRemoteDescription(data.offer);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        
+        socket.emit('webrtc-answer', {
+          roomCode,
+          to: data.from,
+          from: socket.id,
+          answer: answer
+        });
+      } catch (error) {
+        console.error('❌ Error handling WebRTC offer:', error);
+      }
+    });
+
+    socket.on('webrtc-answer', async (data) => {
+      console.log('📨 Received WebRTC answer from:', data.from);
+      
+      if (peerConnection) {
+        try {
+          await peerConnection.setRemoteDescription(data.answer);
+        } catch (error) {
+          console.error('❌ Error handling WebRTC answer:', error);
+        }
+      }
+    });
+
+    socket.on('webrtc-ice-candidate', async (data) => {
+      console.log('🧊 Received ICE candidate from:', data.from);
+      
+      if (peerConnection) {
+        try {
+          await peerConnection.addIceCandidate(data.candidate);
+        } catch (error) {
+          console.error('❌ Error handling ICE candidate:', error);
         }
       }
     });
 
     socket.on('screen-share-stopped', (data) => {
       console.log('🛑 Screen share stopped by:', data.username);
-      // Clear the screen share if it was from this user
+      
+      // Clean up WebRTC connection
+      if (peerConnection) {
+        peerConnection.close();
+        setPeerConnection(null);
+      }
+      
+      setRemoteStream(null);
+      
       if (onScreenShare) {
         onScreenShare(null);
       }
@@ -65,9 +214,13 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
 
     return () => {
       socket.off('screen-share-started');
+      socket.off('request-screen-share-webrtc');
+      socket.off('webrtc-offer');
+      socket.off('webrtc-answer');
+      socket.off('webrtc-ice-candidate');
       socket.off('screen-share-stopped');
     };
-  }, [socket, username, onScreenShare]);
+  }, [socket, username, onScreenShare, isSharing, sharedStream, createReceiverConnection, createSenderConnection, peerConnection]);
 
   const handleStartScreenShare = async (stream) => {
     try {

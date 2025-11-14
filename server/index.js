@@ -1021,6 +1021,27 @@ io.on("connection", (socket) => {
     }
   });
 
+  // WebRTC signaling for screen sharing
+  socket.on("request-screen-share-webrtc", (data) => {
+    console.log(`📡 WebRTC screen share request from ${data.from} to ${data.to}`);
+    socket.to(data.to).emit("request-screen-share-webrtc", data);
+  });
+
+  socket.on("webrtc-offer", (data) => {
+    console.log(`📤 WebRTC offer from ${data.from} to ${data.to}`);
+    socket.to(data.to).emit("webrtc-offer", data);
+  });
+
+  socket.on("webrtc-answer", (data) => {
+    console.log(`📨 WebRTC answer from ${data.from} to ${data.to}`);
+    socket.to(data.to).emit("webrtc-answer", data);
+  });
+
+  socket.on("webrtc-ice-candidate", (data) => {
+    console.log(`🧊 WebRTC ICE candidate from ${data.from} to ${data.to}`);
+    socket.to(data.to).emit("webrtc-ice-candidate", data);
+  });
+
   // Room-level screen sharing state management
   socket.on("room-screen-share-active", (data) => {
     console.log(`Room screen share ${data.isActive ? 'started' : 'stopped'} by ${data.username} in room ${data.roomCode}`);

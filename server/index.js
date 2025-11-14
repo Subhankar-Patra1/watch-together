@@ -55,6 +55,59 @@ app.use(
 );
 app.use(express.json());
 
+// ICE/TURN config endpoint for WebRTC
+// Reads environment variables and returns an iceServers array for clients.
+// Supported env vars:
+// - TWILIO_ICE_SERVERS_JSON: full JSON string from a TURN provider (takes precedence)
+// - TURN_URLS: comma-separated list of turn/turns URIs (e.g. "turn:turn.example.com:3478,turns:turn.example.com:5349?transport=tcp")
+// - TURN_USERNAME
+// - TURN_CREDENTIAL
+// Always includes public STUN as a fallback.
+app.get("/api/ice-servers", (req, res) => {
+  try {
+    // Always include a STUN fallback
+    const iceServers = [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+    ];
+
+    // If a provider JSON blob is supplied, try to parse and use it
+    if (process.env.TWILIO_ICE_SERVERS_JSON) {
+      try {
+        const parsed = JSON.parse(process.env.TWILIO_ICE_SERVERS_JSON);
+        if (Array.isArray(parsed)) {
+          // Some providers return just the array
+          iceServers.push(...parsed);
+        } else if (parsed && Array.isArray(parsed.iceServers)) {
+          iceServers.push(...parsed.iceServers);
+        }
+      } catch (e) {
+        console.warn("Invalid TWILIO_ICE_SERVERS_JSON:", e.message);
+      }
+    }
+
+    // Static TURN credentials
+    const turnUrls = (process.env.TURN_URLS || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const turnUsername = process.env.TURN_USERNAME || process.env.TURN_USER || null;
+    const turnCredential = process.env.TURN_CREDENTIAL || process.env.TURN_PASSWORD || null;
+
+    if (turnUrls.length && turnUsername && turnCredential) {
+      iceServers.push({ urls: turnUrls, username: turnUsername, credential: turnCredential });
+    }
+
+    res.json({ iceServers });
+  } catch (err) {
+    console.error("/api/ice-servers error:", err);
+    // Even on error, return STUN list so clients aren’t blocked
+    res.json({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+      ],
+    });
+  }
+});
+
 // Health check endpoint
 app.get("/", (req, res) => {
   res.json({

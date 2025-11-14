@@ -54,12 +54,9 @@ const RoomPage = ({
     const handleGlobalScreenShareOffer = async (data) => {
       console.log('🌐 Global: Received screen share offer from:', data.from);
       try {
-        const pc = new RTCPeerConnection({
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
-          ]
-        });
+        const { getIceServers } = await import('../utils/iceConfig');
+        const iceServers = await getIceServers();
+        const pc = new RTCPeerConnection({ iceServers });
 
         // Handle remote stream
         pc.ontrack = (event) => {

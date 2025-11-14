@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { getIceServers } from '../utils/iceConfig';
 import './ScreenShare.css';
 
 const ScreenShare = ({
@@ -65,13 +66,8 @@ const ScreenShare = ({
   // Create WebRTC connection for receiving screen shares
   const createReceiverConnection = useCallback(async (sharerSocketId) => {
     console.log('🔗 Creating WebRTC connection to receive screen share from:', sharerSocketId);
-    
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
-    });
+    const iceServers = await getIceServers();
+    const pc = new RTCPeerConnection({ iceServers });
 
     // Handle incoming stream
     pc.ontrack = (event) => {
@@ -111,13 +107,8 @@ const ScreenShare = ({
   // Create WebRTC connection for sending screen shares
   const createSenderConnection = useCallback(async (receiverSocketId, stream) => {
     console.log('📤 Creating WebRTC connection to send screen share to:', receiverSocketId);
-    
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
-    });
+    const iceServers = await getIceServers();
+    const pc = new RTCPeerConnection({ iceServers });
 
     // Add screen share stream to connection
     stream.getTracks().forEach(track => {

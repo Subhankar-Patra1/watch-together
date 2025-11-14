@@ -201,6 +201,21 @@ const RoomPage = ({
       setVideo(data.video);
     });
 
+    // Fallback frame updates (only used if WebRTC stream not available)
+    socket.on('screen-share-frame', (data) => {
+      setVideo(prev => {
+        // Only apply if we are viewing a remote screen share without a stream
+        if (prev && prev.type === 'screen-share' && !prev.stream) {
+          return { ...prev, fallbackFrame: data.frame, username: data.username };
+        }
+        // If no screen share video yet, create a placeholder with frame
+        if (!prev) {
+          return { type: 'screen-share', stream: null, fallbackFrame: data.frame, username: data.username, isRemote: true };
+        }
+        return prev; // keep existing
+      });
+    });
+
     socket.on("video-sync", (data) => {
       console.log("📡 Received video-sync:", data);
       
@@ -313,6 +328,7 @@ const RoomPage = ({
       socket.off("user-joined");
       socket.off("user-left");
       socket.off("video-set");
+  socket.off('screen-share-frame');
       socket.off("video-sync");
       socket.off("sync-success");
       socket.off("sync-error");

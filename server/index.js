@@ -574,6 +574,20 @@ io.on("connection", (socket) => {
     });
   });
 
+  // Lightweight fallback frame relay for screen share (when WebRTC fails)
+  socket.on('screen-share-frame', (data) => {
+    const { roomCode, frame, timestamp, username } = data || {};
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    // Broadcast to everyone except sender
+    socket.to(roomCode).emit('screen-share-frame', {
+      frame,
+      timestamp,
+      username,
+      socketId: socket.id
+    });
+  });
+
   socket.on("set-video", (videoData) => {
     const roomCode = socket.roomCode;
     const room = rooms.get(roomCode);

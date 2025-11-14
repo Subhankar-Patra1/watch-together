@@ -65,6 +65,54 @@ const ScreenShare = ({
   const sharerNamesRef = useRef(new Map());
   const activeSharerSocketRef = useRef(activeShareSocketId);
   useEffect(() => { activeSharerSocketRef.current = activeShareSocketId; }, [activeShareSocketId]);
+  // Fallback frame relay (for networks where WebRTC fails). Sends low-fps JPEGs via socket.
+  const fallbackFrameIntervalRef = useRef(null);
+
+  const startFallbackFrames = useCallback((stream) => {
+    if (fallbackFrameIntervalRef.current) return; // already running
+    try {
+      const track = stream.getVideoTracks()[0];
+      if (!track) return;
+      const videoEl = document.createElement('video');
+      videoEl.style.position = 'fixed';
+      videoEl.style.left = '-9999px';
+      videoEl.muted = true;
+      videoEl.playsInline = true;
+      videoEl.srcObject = new MediaStream([track]);
+      document.body.appendChild(videoEl);
+      videoEl.play().catch(()=>{});
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const targetFPS = 2; // keep bandwidth low
+      fallbackFrameIntervalRef.current = setInterval(() => {
+        if (track.readyState !== 'live') return;
+        const settings = track.getSettings();
+        canvas.width = settings.width || 1280;
+        canvas.height = settings.height || 720;
+        try {
+          ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+          const frameData = canvas.toDataURL('image/jpeg', 0.5); // compressed
+          socket.emit('screen-share-frame', {
+            roomCode,
+            frame: frameData,
+            timestamp: Date.now(),
+            username
+          });
+        } catch (e) {
+          // ignore draw errors
+        }
+      }, 1000 / targetFPS);
+    } catch (e) {
+      console.warn('Fallback frame start failed:', e);
+    }
+  }, [socket, roomCode, username]);
+
+  const stopFallbackFrames = useCallback(() => {
+    if (fallbackFrameIntervalRef.current) {
+      clearInterval(fallbackFrameIntervalRef.current);
+      fallbackFrameIntervalRef.current = null;
+    }
+  }, []);
 
   // Create WebRTC connection for receiving screen shares
   const createReceiverConnection = useCallback(async (sharerSocketId) => {
@@ -408,6 +456,9 @@ const ScreenShare = ({
         socketId: socket.id
         // Note: Don't send stream object to server (not serializable)
       });
+
+      // Start fallback frame relay as safety net
+      startFallbackFrames(stream);
 
       // Handle stream end (when user stops sharing)
       stream.getVideoTracks()[0].addEventListener('ended', () => {

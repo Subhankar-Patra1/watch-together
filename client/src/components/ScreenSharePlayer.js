@@ -25,45 +25,52 @@ const ScreenSharePlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
   }));
 
   useEffect(() => {
-
-    
     if (videoRef.current && videoData && videoData.stream) {
-
-      
-      // Set up the video element with proper audio handling
       const video = videoRef.current;
       video.srcObject = videoData.stream;
-      
-      // Configure audio properties to prevent feedback and distortion
-      video.volume = volume; // Use controlled volume
-      video.muted = isMuted; // Use controlled mute state
-      
-      // Set audio context properties if available
-      if (video.audioTracks) {
-        video.audioTracks.forEach(track => {
-          track.enabled = true;
-        });
-      }
-      
-      // Auto-play the stream with better error handling
-      video.play().then(() => {
-        
-        // Additional audio setup after play starts
-        setTimeout(() => {
-          video.volume = volume; // Set to controlled volume
-          video.muted = isMuted; // Set to controlled mute state
-        }, 100);
-        
-      }).catch(error => {
-        
-        // Try to play without audio if there's an audio issue
-        if (error.name === 'NotAllowedError') {
-          video.muted = true;
-          video.play().catch(err => {
-            console.error('Error playing muted screen share:', err);
-          });
+
+      // Apply current audio prefs first
+      video.volume = volume;
+      video.muted = isMuted;
+
+      const tryPlay = async (withMuteFallback = true) => {
+        try {
+          await video.play();
+          // Re-apply in case the browser tweaked them
+          setTimeout(() => {
+            if (!video) return;
+            video.volume = volume;
+            video.muted = isMuted;
+          }, 100);
+        } catch (err) {
+          // Typical autoplay block on unmuted media
+          if (withMuteFallback && err && err.name === 'NotAllowedError') {
+            video.muted = true;
+            try {
+              await video.play();
+            } catch (err2) {
+              console.error('Screen share play blocked even when muted:', err2);
+            }
+          } else {
+            console.error('Screen share play error:', err);
+          }
         }
-      });
+      };
+
+      // Kick off playback
+      tryPlay(true);
+
+      // If metadata loads but we still aren't playing, try again
+      const onCanPlay = () => {
+        if (video.paused) {
+          tryPlay(false);
+        }
+      };
+      video.addEventListener('canplay', onCanPlay, { once: true });
+
+      return () => {
+        video.removeEventListener('canplay', onCanPlay);
+      };
     }
   }, [videoData, volume, isMuted]);
 

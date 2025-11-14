@@ -89,11 +89,17 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
       }, 50);
 
       // Notify server about screen sharing (server will handle distribution)
+      console.log('📡 Emitting screen-share-started to server:', {
+        roomCode,
+        username,
+        socketId: socket.id
+      });
+      
       socket.emit('screen-share-started', {
         roomCode,
         username,
-        socketId: socket.id,
-        stream: stream // Send stream data to server
+        socketId: socket.id
+        // Note: Don't send stream object to server (not serializable)
       });
 
       // Handle stream end (when user stops sharing)

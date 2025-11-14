@@ -967,7 +967,8 @@ io.on("connection", (socket) => {
 
   // Simplified screen sharing - Google Meet style
   socket.on("screen-share-started", (data) => {
-    console.log(`🖥️ Screen share started by ${data.username} in room ${data.roomCode}`);
+    console.log(`🖥️ SERVER: Screen share started by ${data.username} in room ${data.roomCode}`);
+    console.log(`🖥️ SERVER: Event data:`, data);
     
     const room = rooms.get(data.roomCode);
     if (room) {
@@ -980,6 +981,7 @@ io.on("connection", (socket) => {
       };
       
       // Broadcast to ALL users in the room (including the sharer for consistency)
+      console.log(`🖥️ SERVER: Broadcasting video-set to room ${data.roomCode}:`, room.video);
       io.to(data.roomCode).emit("video-set", {
         video: room.video
       });

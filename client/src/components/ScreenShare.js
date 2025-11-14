@@ -4,6 +4,8 @@ import './ScreenShare.css';
 const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) => {
   const [isSharing, setIsSharing] = useState(false);
   const [sharedStream, setSharedStream] = useState(null);
+  const [peerConnections, setPeerConnections] = useState(new Map());
+  const [remoteStreams, setRemoteStreams] = useState(new Map());
 
   const handleStopScreenShare = useCallback(() => {
     if (sharedStream) {
@@ -11,6 +13,13 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
       sharedStream.getTracks().forEach(track => track.stop());
       setSharedStream(null);
     }
+
+    // Close all peer connections
+    peerConnections.forEach(pc => {
+      pc.close();
+    });
+    setPeerConnections(new Map());
+    setRemoteStreams(new Map());
 
     setIsSharing(false);
 
@@ -26,7 +35,7 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
     });
 
     console.log('Screen sharing stopped');
-  }, [sharedStream, onScreenShare, socket, roomCode, username]);
+  }, [sharedStream, onScreenShare, socket, roomCode, username, peerConnections]);
 
   useEffect(() => {
     // Handle force stop from parent component
@@ -35,39 +44,185 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
     }
   }, [forceStop, isSharing, handleStopScreenShare]);
 
+  // Create peer connection for screen sharing
+  const createPeerConnection = useCallback((targetSocketId) => {
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+
+    // Add local stream to peer connection
+    if (sharedStream) {
+      sharedStream.getTracks().forEach(track => {
+        pc.addTrack(track, sharedStream);
+      });
+    }
+
+    // Handle ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit('screen-share-ice-candidate', {
+          roomCode,
+          to: targetSocketId,
+          from: socket.id,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    // Handle remote stream (for receiving screen shares)
+    pc.ontrack = (event) => {
+      console.log('🎥 Received remote screen share stream from:', targetSocketId);
+      const remoteStream = event.streams[0];
+      setRemoteStreams(prev => new Map(prev.set(targetSocketId, remoteStream)));
+      
+      // Show the remote screen share in main video area
+      if (onScreenShare) {
+        console.log('🖥️ Displaying remote screen share in main video area');
+        onScreenShare({
+          type: 'screen-share',
+          stream: remoteStream,
+          username: 'Remote User'
+        });
+      }
+    };
+
+    // Add connection state logging
+    pc.onconnectionstatechange = () => {
+      console.log(`🔗 Screen share connection state with ${targetSocketId}:`, pc.connectionState);
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log(`🧊 Screen share ICE connection state with ${targetSocketId}:`, pc.iceConnectionState);
+    };
+
+    return pc;
+  }, [sharedStream, socket, roomCode, onScreenShare]);
+
   useEffect(() => {
     // Socket listeners for screen sharing
     socket.on('screen-share-started', (data) => {
-      console.log('Screen share started by:', data.username);
+      console.log('🎬 Screen share started by:', data.username, 'Socket ID:', data.socketId);
+      // Don't create connection if it's our own screen share
+      if (data.username !== username && data.socketId !== socket.id) {
+        console.log('📡 Requesting screen share from:', data.username);
+        // Request screen share from the user who started sharing
+        socket.emit('request-screen-share', {
+          roomCode,
+          to: data.socketId,
+          from: socket.id
+        });
+      }
     });
 
     socket.on('screen-share-stopped', (data) => {
       console.log('Screen share stopped by:', data.username);
+      // Clean up peer connection for this user
+      if (peerConnections.has(data.socketId)) {
+        peerConnections.get(data.socketId).close();
+        setPeerConnections(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(data.socketId);
+          return newMap;
+        });
+      }
+      
+      // Remove remote stream
+      setRemoteStreams(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(data.socketId);
+        return newMap;
+      });
+
+      // Clear main video if this was the active screen share
+      if (onScreenShare) {
+        onScreenShare(null);
+      }
+    });
+
+    socket.on('request-screen-share', async (data) => {
+      console.log('📞 Screen share requested by:', data.from);
+      if (isSharing && sharedStream) {
+        console.log('🎥 Creating offer for screen share to:', data.from);
+        // Create peer connection and send offer
+        const pc = createPeerConnection(data.from);
+        setPeerConnections(prev => new Map(prev.set(data.from, pc)));
+
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          
+          console.log('📤 Sending screen share offer to:', data.from);
+          socket.emit('screen-share-offer', {
+            roomCode,
+            to: data.from,
+            from: socket.id,
+            offer: offer
+          });
+        } catch (error) {
+          console.error('❌ Error creating screen share offer:', error);
+        }
+      } else {
+        console.log('⚠️ Not sharing or no stream available');
+      }
     });
 
     socket.on('screen-share-offer', async (data) => {
-      // Handle WebRTC offer for screen sharing
       console.log('Received screen share offer from:', data.from);
+      try {
+        const pc = createPeerConnection(data.from);
+        setPeerConnections(prev => new Map(prev.set(data.from, pc)));
+
+        await pc.setRemoteDescription(data.offer);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        socket.emit('screen-share-answer', {
+          roomCode,
+          to: data.from,
+          from: socket.id,
+          answer: answer
+        });
+      } catch (error) {
+        console.error('Error handling screen share offer:', error);
+      }
     });
 
     socket.on('screen-share-answer', async (data) => {
-      // Handle WebRTC answer for screen sharing
       console.log('Received screen share answer from:', data.from);
+      try {
+        const pc = peerConnections.get(data.from);
+        if (pc) {
+          await pc.setRemoteDescription(data.answer);
+        }
+      } catch (error) {
+        console.error('Error handling screen share answer:', error);
+      }
     });
 
     socket.on('screen-share-ice-candidate', async (data) => {
-      // Handle ICE candidates for screen sharing
       console.log('Received ICE candidate from:', data.from);
+      try {
+        const pc = peerConnections.get(data.from);
+        if (pc) {
+          await pc.addIceCandidate(data.candidate);
+        }
+      } catch (error) {
+        console.error('Error handling ICE candidate:', error);
+      }
     });
 
     return () => {
       socket.off('screen-share-started');
       socket.off('screen-share-stopped');
+      socket.off('request-screen-share');
       socket.off('screen-share-offer');
       socket.off('screen-share-answer');
       socket.off('screen-share-ice-candidate');
     };
-  }, [socket]);
+  }, [socket, username, isSharing, sharedStream, createPeerConnection, peerConnections, onScreenShare]);
 
   const handleStartScreenShare = async (stream) => {
     try {
@@ -91,7 +246,8 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
       // Notify other users that screen sharing started
       socket.emit('screen-share-start', {
         roomCode,
-        username
+        username,
+        socketId: socket.id
       });
 
       // Handle stream end (when user stops sharing)

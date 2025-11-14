@@ -965,6 +965,68 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Screen sharing WebRTC signaling events
+  socket.on("screen-share-start", (data) => {
+    console.log(`Screen share started by ${data.username} in room ${data.roomCode}`);
+    // Broadcast to all other users in the room
+    socket.to(data.roomCode).emit("screen-share-started", {
+      username: data.username,
+      socketId: data.socketId
+    });
+  });
+
+  socket.on("screen-share-stop", (data) => {
+    console.log(`Screen share stopped by ${data.username} in room ${data.roomCode}`);
+    // Broadcast to all other users in the room
+    socket.to(data.roomCode).emit("screen-share-stopped", {
+      username: data.username,
+      socketId: socket.id
+    });
+  });
+
+  socket.on("request-screen-share", (data) => {
+    console.log(`Screen share requested from ${data.from} to ${data.to}`);
+    // Forward the request to the specific user
+    socket.to(data.to).emit("request-screen-share", {
+      roomCode: data.roomCode,
+      from: data.from,
+      to: data.to
+    });
+  });
+
+  socket.on("screen-share-offer", (data) => {
+    console.log(`Screen share offer from ${data.from} to ${data.to}`);
+    // Forward the WebRTC offer to the target user
+    socket.to(data.to).emit("screen-share-offer", {
+      roomCode: data.roomCode,
+      from: data.from,
+      to: data.to,
+      offer: data.offer
+    });
+  });
+
+  socket.on("screen-share-answer", (data) => {
+    console.log(`Screen share answer from ${data.from} to ${data.to}`);
+    // Forward the WebRTC answer to the target user
+    socket.to(data.to).emit("screen-share-answer", {
+      roomCode: data.roomCode,
+      from: data.from,
+      to: data.to,
+      answer: data.answer
+    });
+  });
+
+  socket.on("screen-share-ice-candidate", (data) => {
+    console.log(`Screen share ICE candidate from ${data.from} to ${data.to}`);
+    // Forward the ICE candidate to the target user
+    socket.to(data.to).emit("screen-share-ice-candidate", {
+      roomCode: data.roomCode,
+      from: data.from,
+      to: data.to,
+      candidate: data.candidate
+    });
+  });
+
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
 

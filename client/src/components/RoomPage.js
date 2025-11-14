@@ -193,6 +193,14 @@ const RoomPage = ({
 
     socket.on("video-set", (data) => {
       console.log("📺 Received video-set:", data.video);
+      // If this is a screen share and WE are the sharer, keep our local stream
+      if (
+        data?.video?.type === 'screen-share' &&
+        (data.video.socketId === socket.id || data.video.username === username)
+      ) {
+        console.log('🖥️ Ignoring video-set for sharer to preserve local screen stream');
+        return;
+      }
       setVideo(data.video);
     });
 

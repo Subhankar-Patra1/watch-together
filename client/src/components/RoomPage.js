@@ -745,6 +745,18 @@ const RoomPage = ({
 
           <div className="video-container">{videoPlayer}</div>
 
+          {!isHost && (
+            <ScreenShare
+              socket={socket}
+              roomCode={roomCode}
+              username={username}
+              onScreenShare={handleScreenShare}
+              forceStop={false}
+              canShare={false}
+              showControls={false}
+            />
+          )}
+
           {isHost && (
             <VideoControls
               onSetVideo={handleSetVideo}

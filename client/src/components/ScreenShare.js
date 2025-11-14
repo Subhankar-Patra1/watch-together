@@ -1,7 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ScreenShare.css';
 
-const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) => {
+const ScreenShare = ({
+  socket,
+  roomCode,
+  username,
+  onScreenShare,
+  forceStop = false,
+  canShare = true,
+  showControls = true
+}) => {
   const [isSharing, setIsSharing] = useState(false);
   const [sharedStream, setSharedStream] = useState(null);
 
@@ -18,6 +26,17 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
     if (onScreenShare) {
       onScreenShare(null);
     }
+
+    // Close all outgoing WebRTC connections
+    senderConnectionsRef.current.forEach((pc, receiverId) => {
+      try {
+        pc.close();
+        console.log('🔚 Closed sender connection for', receiverId);
+      } catch (err) {
+        console.warn('Error closing sender connection:', err);
+      }
+    });
+    senderConnectionsRef.current.clear();
 
     // Notify server that screen sharing stopped (server will broadcast to all)
     socket.emit('screen-share-stopped', {
@@ -36,9 +55,10 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
     }
   }, [forceStop, isSharing, handleStopScreenShare]);
 
-  // WebRTC state for receiving screen shares
-  const [peerConnection, setPeerConnection] = useState(null);
+  // WebRTC state for receiving/sending screen shares
   const [remoteStream, setRemoteStream] = useState(null);
+  const receiverConnectionsRef = useRef(new Map());
+  const senderConnectionsRef = useRef(new Map());
 
   // Create WebRTC connection for receiving screen shares
   const createReceiverConnection = useCallback(async (sharerSocketId) => {
@@ -80,7 +100,7 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
       }
     };
 
-    setPeerConnection(pc);
+    receiverConnectionsRef.current.set(sharerSocketId, pc);
     return pc;
   }, [socket, roomCode, onScreenShare]);
 
@@ -112,6 +132,7 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
       }
     };
 
+    senderConnectionsRef.current.set(receiverSocketId, pc);
     return pc;
   }, [socket, roomCode]);
 
@@ -184,45 +205,78 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
 
     socket.on('webrtc-answer', async (data) => {
       console.log('📨 Received WebRTC answer from:', data.from);
-      
-      if (peerConnection) {
-        try {
-          await peerConnection.setRemoteDescription(data.answer);
-        } catch (error) {
-          console.error('❌ Error handling WebRTC answer:', error);
+
+      const senderConnection = senderConnectionsRef.current.get(data.from);
+      const receiverConnection = receiverConnectionsRef.current.get(data.from);
+
+      try {
+        if (senderConnection) {
+          await senderConnection.setRemoteDescription(data.answer);
+        } else if (receiverConnection) {
+          await receiverConnection.setRemoteDescription(data.answer);
+        } else {
+          console.warn('No matching peer connection found for answer from:', data.from);
         }
+      } catch (error) {
+        console.error('❌ Error handling WebRTC answer:', error);
       }
     });
 
     socket.on('webrtc-ice-candidate', async (data) => {
       console.log('🧊 Received ICE candidate from:', data.from);
-      
-      if (peerConnection) {
-        try {
-          await peerConnection.addIceCandidate(data.candidate);
-        } catch (error) {
-          console.error('❌ Error handling ICE candidate:', error);
+
+      const senderConnection = senderConnectionsRef.current.get(data.from);
+      const receiverConnection = receiverConnectionsRef.current.get(data.from);
+
+      try {
+        if (senderConnection) {
+          await senderConnection.addIceCandidate(data.candidate);
+        } else if (receiverConnection) {
+          await receiverConnection.addIceCandidate(data.candidate);
+        } else {
+          console.warn('No matching peer connection found for ICE candidate from:', data.from);
         }
+      } catch (error) {
+        console.error('❌ Error handling ICE candidate:', error);
       }
     });
 
     socket.on('screen-share-stopped', (data) => {
       console.log('🛑 Screen share stopped by:', data.username);
-      
-      // Clean up WebRTC connection
-      if (peerConnection) {
-        peerConnection.close();
-        setPeerConnection(null);
-      }
-      
+
+      receiverConnectionsRef.current.forEach((pc, sharerId) => {
+        try {
+          pc.close();
+          console.log('🔚 Closed receiver connection from', sharerId);
+        } catch (err) {
+          console.warn('Error closing receiver connection:', err);
+        }
+      });
+      receiverConnectionsRef.current.clear();
+
+      senderConnectionsRef.current.forEach((pc, receiverId) => {
+        try {
+          pc.close();
+          console.log('🔚 Closed sender connection for', receiverId);
+        } catch (err) {
+          console.warn('Error closing sender connection:', err);
+        }
+      });
+      senderConnectionsRef.current.clear();
+
       setRemoteStream(null);
-      
+
       if (onScreenShare) {
         onScreenShare(null);
       }
     });
 
     return () => {
+      receiverConnectionsRef.current.forEach((pc) => pc.close());
+      receiverConnectionsRef.current.clear();
+      senderConnectionsRef.current.forEach((pc) => pc.close());
+      senderConnectionsRef.current.clear();
+
       socket.off('screen-share-started');
       socket.off('request-screen-share-webrtc');
       socket.off('webrtc-offer');
@@ -279,6 +333,9 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
   };
 
   const startScreenShare = async () => {
+    if (!canShare) {
+      return;
+    }
     // Directly trigger browser's native screen sharing dialog
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -323,10 +380,14 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
     }
   };
 
+  if (!showControls) {
+    return null;
+  }
+
   return (
     <div className="screen-share-container">
       {!isSharing ? (
-        <button className="share-screen-btn" onClick={startScreenShare}>
+        <button className="share-screen-btn" onClick={startScreenShare} disabled={!canShare}>
           <span className="btn-icon">🖥️</span>
           Share Screen
         </button>

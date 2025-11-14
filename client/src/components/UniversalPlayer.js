@@ -141,8 +141,7 @@ const UniversalPlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
 
   // For screen share, check if it's remote or local
   if (videoData.type === 'screen-share') {
-    // Local screen share (sharer) needs a stream
-    if (!videoData.stream && !videoData.isRemote && !videoData.socketId) {
+    if (!videoData.stream && !videoData.socketId) {
       return (
         <div
           style={{
@@ -183,9 +182,7 @@ const UniversalPlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
 
   switch (videoType) {
     case "screen-share":
-      // Check if it's a remote screen share or local
-      // Remote screen share: has socketId but no stream, or explicitly marked as remote
-      if (videoData.isRemote || (videoData.socketId && !videoData.stream)) {
+      if (!videoData.stream) {
         return (
           <div
             style={{
@@ -205,21 +202,20 @@ const UniversalPlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
               {videoData.username} is sharing their screen
             </div>
             <div style={{ fontSize: "14px", opacity: 0.7, textAlign: "center" }}>
-              Screen sharing is active
+              {videoData.isRemote ? 'Waiting for screen share connection...' : 'Screen sharing is active'}
             </div>
           </div>
         );
-      } else {
-        // Local screen share with actual stream
-        return (
-          <ScreenSharePlayer
-            key={`screen-share-${videoData.username}`}
-            ref={ref}
-            videoData={videoData}
-            onVideoAction={onVideoAction}
-          />
-        );
       }
+
+      return (
+        <ScreenSharePlayer
+          key={`screen-share-${videoData.username}`}
+          ref={ref}
+          videoData={videoData}
+          onVideoAction={onVideoAction}
+        />
+      );
     
     case "screen-share-remote":
       return (

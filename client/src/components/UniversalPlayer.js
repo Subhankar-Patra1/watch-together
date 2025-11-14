@@ -179,14 +179,42 @@ const UniversalPlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
 
   switch (videoType) {
     case "screen-share":
-      return (
-        <ScreenSharePlayer
-          key={`screen-share-${videoData.username}`}
-          ref={ref}
-          videoData={videoData}
-          onVideoAction={onVideoAction}
-        />
-      );
+      // Check if it's a remote screen share or local
+      if (videoData.isRemote || videoData.socketId) {
+        return (
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              backgroundColor: "#1a1a1a",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#fff",
+              flexDirection: "column",
+              gap: "20px"
+            }}
+          >
+            <div style={{ fontSize: "48px" }}>🖥️</div>
+            <div style={{ fontSize: "18px", textAlign: "center" }}>
+              {videoData.username} is sharing their screen
+            </div>
+            <div style={{ fontSize: "14px", opacity: 0.7, textAlign: "center" }}>
+              Screen sharing is active
+            </div>
+          </div>
+        );
+      } else {
+        // Local screen share with actual stream
+        return (
+          <ScreenSharePlayer
+            key={`screen-share-${videoData.username}`}
+            ref={ref}
+            videoData={videoData}
+            onVideoAction={onVideoAction}
+          />
+        );
+      }
     
     case "screen-share-remote":
       return (

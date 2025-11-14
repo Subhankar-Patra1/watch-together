@@ -19,8 +19,14 @@ const allowedOrigins =
           return callback(null, true);
         }
 
-        // Allow all localhost and vercel.app domains
-        if (origin.includes("localhost") || origin.includes(".vercel.app")) {
+        // Allow all localhost, vercel.app, and railway.app domains
+        if (
+          origin.includes("localhost") || 
+          origin.includes(".vercel.app") ||
+          origin.includes("vercel.app") ||
+          origin.includes(".railway.app") ||
+          origin.includes("railway.app")
+        ) {
           console.log("Allowing origin:", origin);
           callback(null, true);
         } else {

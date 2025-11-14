@@ -1,6 +1,9 @@
 {
   "version": 2,
   "name": "watch-together-frontend",
+  "env": {
+    "REACT_APP_SERVER_URL": "https://watch-together-519k.onrender.com"
+  },
   "builds": [
     {
       "src": "client/package.json",

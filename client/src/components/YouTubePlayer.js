@@ -20,6 +20,7 @@ const YouTubePlayer = forwardRef(({ videoId, onVideoAction }, ref) => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadingError, setLoadingError] = useState(null);
   const [playerReady, setPlayerReady] = useState(false);
+  const [showStartPrompt, setShowStartPrompt] = useState(false);
 
   useImperativeHandle(ref, () => ({
     syncVideo: (data) => {
@@ -35,7 +36,27 @@ const YouTubePlayer = forwardRef(({ videoId, onVideoAction }, ref) => {
         }
 
         if (data.action === "play" && player.getPlayerState() !== 1) {
-          player.playVideo();
+          // Try autoplay in a browser-friendly way: mute, then play.
+          try {
+            if (player.isMuted && typeof player.isMuted === 'function' && !player.isMuted()) {
+              player.mute();
+            } else if (player.mute) {
+              player.mute();
+            }
+          } catch (_) {}
+
+          try {
+            player.playVideo();
+          } catch (_) {}
+
+          // Verify after a short delay; if not playing, show click-to-start prompt
+          setTimeout(() => {
+            try {
+              if (player.getPlayerState && player.getPlayerState() !== 1) {
+                setShowStartPrompt(true);
+              }
+            } catch (_) {}
+          }, 600);
         } else if (data.action === "pause" && player.getPlayerState() === 1) {
           player.pauseVideo();
         }
@@ -69,6 +90,11 @@ const YouTubePlayer = forwardRef(({ videoId, onVideoAction }, ref) => {
 
       try {
         const currentTime = event.target.getCurrentTime();
+
+        // Hide any autoplay prompt once we know the player entered PLAYING
+        if (event.data === window.YT.PlayerState.PLAYING) {
+          setShowStartPrompt(false);
+        }
 
       // Clear any pending sync timeout
       if (syncTimeout.current) {
@@ -422,6 +448,52 @@ const YouTubePlayer = forwardRef(({ videoId, onVideoAction }, ref) => {
                 </a>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Autoplay prompt (appears when browser blocks autoplay) */}
+      {showStartPrompt && !loadingError && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            color: "#fff",
+            fontSize: "16px",
+            zIndex: 900,
+          }}
+        >
+          <div style={{ textAlign: "center" }}>
+            <div style={{ marginBottom: 10 }}>Click to start playback</div>
+            <button
+              onClick={() => {
+                try {
+                  const p = playerRef.current;
+                  if (!p) return;
+                  if (p.mute) p.mute();
+                  p.playVideo();
+                  setShowStartPrompt(false);
+                } catch (_) {}
+              }}
+              style={{
+                padding: '8px 14px',
+                background: '#4ECDC4',
+                color: '#001219',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              ▶ Play
+            </button>
           </div>
         </div>
       )}

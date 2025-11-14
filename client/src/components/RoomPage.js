@@ -46,7 +46,93 @@ const RoomPage = ({
     }
   }, [initialIsHost]);
 
+  // Global screen sharing WebRTC state
+  const [globalPeerConnections, setGlobalPeerConnections] = useState(new Map());
+
   useEffect(() => {
+    // Global screen sharing WebRTC listeners (independent of ScreenShare component)
+    const handleGlobalScreenShareOffer = async (data) => {
+      console.log('🌐 Global: Received screen share offer from:', data.from);
+      try {
+        const pc = new RTCPeerConnection({
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+          ]
+        });
+
+        // Handle remote stream
+        pc.ontrack = (event) => {
+          console.log('🌐 Global: Received remote screen share stream');
+          const remoteStream = event.streams[0];
+          
+          // Show the remote screen share in main video area
+          setVideo({
+            type: 'screen-share',
+            stream: remoteStream,
+            username: data.username || 'Remote User',
+            isRemote: true
+          });
+        };
+
+        // Handle ICE candidates
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            socket.emit('screen-share-ice-candidate', {
+              roomCode,
+              to: data.from,
+              from: socket.id,
+              candidate: event.candidate
+            });
+          }
+        };
+
+        setGlobalPeerConnections(prev => new Map(prev.set(data.from, pc)));
+
+        await pc.setRemoteDescription(data.offer);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        socket.emit('screen-share-answer', {
+          roomCode,
+          to: data.from,
+          from: socket.id,
+          answer: answer
+        });
+      } catch (error) {
+        console.error('🌐 Global: Error handling screen share offer:', error);
+      }
+    };
+
+    const handleGlobalScreenShareAnswer = async (data) => {
+      console.log('🌐 Global: Received screen share answer from:', data.from);
+      try {
+        const pc = globalPeerConnections.get(data.from);
+        if (pc) {
+          await pc.setRemoteDescription(data.answer);
+        }
+      } catch (error) {
+        console.error('🌐 Global: Error handling screen share answer:', error);
+      }
+    };
+
+    const handleGlobalScreenShareIceCandidate = async (data) => {
+      console.log('🌐 Global: Received ICE candidate from:', data.from);
+      try {
+        const pc = globalPeerConnections.get(data.from);
+        if (pc) {
+          await pc.addIceCandidate(data.candidate);
+        }
+      } catch (error) {
+        console.error('🌐 Global: Error handling ICE candidate:', error);
+      }
+    };
+
+    // Add global listeners
+    socket.on('screen-share-offer', handleGlobalScreenShareOffer);
+    socket.on('screen-share-answer', handleGlobalScreenShareAnswer);
+    socket.on('screen-share-ice-candidate', handleGlobalScreenShareIceCandidate);
+
     // Socket event listeners
     socket.on("room-joined", (data) => {
       setUsers(data.users);
@@ -164,19 +250,37 @@ const RoomPage = ({
     // Screen sharing room state events
     socket.on("room-screen-share-started", (data) => {
       console.log('🖥️ Room screen share started by:', data.username);
+      console.log('🖥️ Current username:', username);
+      console.log('🖥️ Current video state:', video);
+      
       // Don't override if it's our own screen share
       if (data.username !== username) {
+        console.log('🖥️ Setting remote screen share placeholder');
         // Show placeholder for remote screen share
         setVideo({
           type: 'screen-share-remote',
           username: data.username,
           message: `${data.username} is sharing their screen`
         });
+      } else {
+        console.log('🖥️ Ignoring own screen share notification');
       }
     });
 
     socket.on("room-screen-share-stopped", (data) => {
       console.log('🖥️ Room screen share stopped by:', data.username);
+      
+      // Clean up peer connection for this user
+      const pc = globalPeerConnections.get(data.socketId);
+      if (pc) {
+        pc.close();
+        setGlobalPeerConnections(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(data.socketId);
+          return newMap;
+        });
+      }
+      
       // Clear video if it was a screen share
       if (video && (video.type === 'screen-share' || video.type === 'screen-share-remote')) {
         setVideo(null);
@@ -184,6 +288,10 @@ const RoomPage = ({
     });
 
     return () => {
+      // Clean up global peer connections
+      globalPeerConnections.forEach(pc => pc.close());
+      setGlobalPeerConnections(new Map());
+
       socket.off("room-joined");
       socket.off("initial-video-sync");
       socket.off("users-updated");
@@ -200,8 +308,11 @@ const RoomPage = ({
       socket.off("error");
       socket.off("room-screen-share-started");
       socket.off("room-screen-share-stopped");
+      socket.off("screen-share-offer");
+      socket.off("screen-share-answer");
+      socket.off("screen-share-ice-candidate");
     };
-  }, [socket]);
+  }, [socket, roomCode, globalPeerConnections]);
 
   const handleVideoAction = useCallback(
     (action, currentTime) => {

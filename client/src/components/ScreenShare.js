@@ -84,7 +84,8 @@ const ScreenShare = ({ socket, roomCode, username, onScreenShare, forceStop }) =
         onScreenShare({
           type: 'screen-share',
           stream: remoteStream,
-          username: 'Remote User'
+          username: 'Remote User',
+          isRemote: true
         });
       }
     };

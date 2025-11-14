@@ -149,7 +149,10 @@ const VoiceChat = forwardRef(
                     memberConnectionKey
                   );
                 }
-              } else if (member.socketId !== socket.id && socket.id > member.socketId) {
+              } else if (
+                member.socketId !== socket.id &&
+                socket.id > member.socketId
+              ) {
                 console.log(
                   `Not initiating connection to ${member.username} (${member.socketId}) - they should initiate (larger socket ID)`
                 );
@@ -442,7 +445,7 @@ const VoiceChat = forwardRef(
 
     const endVoiceChat = () => {
       console.log("🚪 Ending voice chat, cleaning up all connections");
-      
+
       // Clean up local stream
       if (localStream) {
         localStream.getTracks().forEach((track) => {
@@ -460,15 +463,15 @@ const VoiceChat = forwardRef(
         }
       });
       setPeerConnections(new Map());
-      
+
       // Clean up remote streams
       setRemoteStreams(new Map());
-      
+
       // Clear all pending data
       setPendingIceCandidates(new Map());
       setPendingOffers([]);
       setConnectionAttempts(new Map());
-      
+
       // Reset states
       setActiveVoiceChat(null);
       setVoiceChatMembers([]);
@@ -506,12 +509,18 @@ const VoiceChat = forwardRef(
       const existingConnection = peerConnections.get(socketId);
       if (existingConnection) {
         // If connection is closed, clean it up first
-        if (existingConnection.connectionState === "closed" || 
-            existingConnection.signalingState === "closed") {
-          console.log(`Cleaning up closed connection to ${socketId} before creating new one`);
+        if (
+          existingConnection.connectionState === "closed" ||
+          existingConnection.signalingState === "closed"
+        ) {
+          console.log(
+            `Cleaning up closed connection to ${socketId} before creating new one`
+          );
           handlePeerLeft(socketId);
         } else {
-          console.log(`Already have active connection to ${socketId}, skipping`);
+          console.log(
+            `Already have active connection to ${socketId}, skipping`
+          );
           return;
         }
       }
@@ -588,7 +597,9 @@ const VoiceChat = forwardRef(
             peerConnection.connectionState === "failed" ||
             peerConnection.connectionState === "closed"
           ) {
-            console.log(`Connection to ${socketId} ${peerConnection.connectionState}, cleaning up`);
+            console.log(
+              `Connection to ${socketId} ${peerConnection.connectionState}, cleaning up`
+            );
             handlePeerLeft(socketId);
           }
         };
@@ -693,9 +704,13 @@ const VoiceChat = forwardRef(
       const existingConnection = peerConnections.get(data.fromSocketId);
       if (existingConnection) {
         // If connection is closed, clean it up first
-        if (existingConnection.connectionState === "closed" || 
-            existingConnection.signalingState === "closed") {
-          console.log(`Cleaning up closed connection to ${data.fromSocketId} before handling new offer`);
+        if (
+          existingConnection.connectionState === "closed" ||
+          existingConnection.signalingState === "closed"
+        ) {
+          console.log(
+            `Cleaning up closed connection to ${data.fromSocketId} before handling new offer`
+          );
           handlePeerLeft(data.fromSocketId);
         } else {
           console.log(

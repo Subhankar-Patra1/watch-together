@@ -526,6 +526,20 @@ io.on("connection", (socket) => {
         type: "direct",
         url: videoData.url,
       };
+    } else if (videoData.type === "vimeo" || 
+               videoData.type === "dailymotion" || 
+               videoData.type === "twitch" || 
+               videoData.type === "facebook" || 
+               videoData.type === "instagram" || 
+               videoData.type === "tiktok" || 
+               videoData.type === "embed" || 
+               videoData.type === "dash" || 
+               videoData.type === "generic") {
+      // New video types
+      processedVideoData = {
+        type: videoData.type,
+        url: videoData.url,
+      };
     } else if (typeof videoData === "string" || videoData.videoUrl) {
       // Backward compatibility for old format
       const videoUrl = videoData.videoUrl || videoData;

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import io from "socket.io-client";
 import LandingPage from "./components/LandingPage";
 import RoomPage from "./components/RoomPage";
+import youtubeAPI from "./utils/youtubeAPI";
 import "./App.css";
 
 const serverUrl = process.env.REACT_APP_SERVER_URL || "http://localhost:5000";
@@ -14,6 +15,13 @@ function App() {
   const [username, setUsername] = useState("");
   const [sharedRoomCode, setSharedRoomCode] = useState(null);
   const [joinError, setJoinError] = useState("");
+
+  // Preload YouTube API on app start
+  useEffect(() => {
+    youtubeAPI.load().catch(error => {
+      console.warn('Failed to preload YouTube API:', error);
+    });
+  }, []);
 
   // Socket event handlers
   useEffect(() => {

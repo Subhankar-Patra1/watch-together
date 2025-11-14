@@ -12,6 +12,7 @@ import UniversalPlayer, {
 import VideoCallSection from "./VideoCallSection";
 import GroupChatSection from "./GroupChatSection";
 import ResizablePanel from "./ResizablePanel";
+import ScreenShare from "./ScreenShare";
 
 const RoomPage = ({
   socket,
@@ -31,6 +32,9 @@ const RoomPage = ({
   const [showHostTransferPopup, setShowHostTransferPopup] = useState(false);
   const [selectedNewHost, setSelectedNewHost] = useState("");
   const [activeRightSection, setActiveRightSection] = useState("chat"); // 'chat' or 'video'
+  const [showScreenSharePopup, setShowScreenSharePopup] = useState(false);
+  const [pendingVideoData, setPendingVideoData] = useState(null);
+  const [forceStopScreenShare, setForceStopScreenShare] = useState(false);
   const playerRef = useRef(null);
 
   // Sync initial host status from prop
@@ -209,6 +213,15 @@ const RoomPage = ({
 
   const handleSetVideo = useCallback(
     (videoData) => {
+      // Check if currently screen sharing
+      if (video && video.type === 'screen-share') {
+        // Store the pending video data and show popup
+        setPendingVideoData(videoData);
+        setShowScreenSharePopup(true);
+        return;
+      }
+
+      // Process and set video normally
       const videoType = detectVideoType(videoData);
       let processedVideoData;
 
@@ -226,6 +239,19 @@ const RoomPage = ({
           };
           break;
 
+        case "vimeo":
+        case "dailymotion":
+        case "twitch":
+        case "facebook":
+        case "instagram":
+        case "tiktok":
+        case "embed":
+          processedVideoData = {
+            type: videoType,
+            url: videoData,
+          };
+          break;
+
         case "hls":
           processedVideoData = {
             type: "hls",
@@ -233,46 +259,46 @@ const RoomPage = ({
           };
           break;
 
+        case "dash":
         case "direct":
+        case "generic":
           processedVideoData = {
-            type: "direct",
+            type: videoType,
             url: videoData,
           };
           break;
 
         default:
-          setError(
-            "Unsupported video format. Please use YouTube URLs or direct video links (.mp4, .m3u8)"
-          );
-          return;
+          // Accept any URL and try to play it as generic
+          processedVideoData = {
+            type: "generic",
+            url: videoData,
+          };
+          break;
       }
+
 
       socket.emit("set-video", processedVideoData);
       setError("");
     },
-    [socket]
+    [socket, video]
   );
 
   const handleSyncVideo = useCallback(() => {
-    console.log("🔄 Sync button clicked");
-    console.log("🔄 playerRef.current:", playerRef.current);
-    console.log("🔄 isHost:", isHost);
-    console.log("🔄 socket.connected:", socket.connected);
-    console.log("🔄 socket.id:", socket.id);
-    console.log("🔄 video:", video);
-
     if (!playerRef.current) {
-      console.log("🔄 ❌ No player reference available");
       return;
     }
 
     if (!video) {
-      console.log("🔄 ❌ No video loaded");
       return;
     }
 
     if (!isHost) {
-      console.log("🔄 ❌ User is not host, cannot sync");
+      return;
+    }
+
+    if (video.type === 'screen-share') {
+      // Cannot sync screen share - it's a live stream
       return;
     }
 
@@ -280,11 +306,7 @@ const RoomPage = ({
       const currentTime = playerRef.current.getCurrentTime();
       const playerState = playerRef.current.getPlayerState();
 
-      console.log("🔄 Current time:", currentTime);
-      console.log("🔄 Player state:", playerState);
-
       if (currentTime === undefined || currentTime === null) {
-        console.log("🔄 ❌ Could not get current time from player");
         return;
       }
 
@@ -298,27 +320,112 @@ const RoomPage = ({
         action = "pause";
       }
 
-      console.log(
-        "🔄 Emitting video-sync-request with action:",
-        action,
-        "time:",
-        currentTime
-      );
-
-      // Test socket connection first
-      socket.emit("test-sync", { test: "data", currentTime, action });
-
       // Emit sync action to all other users
       socket.emit("video-sync-request", {
         action,
         currentTime,
       });
-
-      console.log("🔄 ✅ Sync request sent successfully");
     } catch (error) {
-      console.error("🔄 ❌ Error during sync:", error);
+      console.error("Error during sync:", error);
     }
   }, [socket, isHost, video]);
+
+  const handleScreenShare = useCallback((screenShareData) => {
+    if (screenShareData) {
+      // Set screen share as the main video
+      setVideo(screenShareData);
+    } else {
+      // Clear screen share
+      setVideo(null);
+    }
+  }, []);
+
+  const handleStopScreenShareAndSetVideo = useCallback(() => {
+    if (pendingVideoData) {
+      // Process the pending video data first
+      const videoType = detectVideoType(pendingVideoData);
+      let processedVideoData;
+
+      switch (videoType) {
+        case "youtube":
+          const videoId = extractYouTubeVideoId(pendingVideoData);
+          if (!videoId) {
+            setError("Invalid YouTube URL");
+            setShowScreenSharePopup(false);
+            setPendingVideoData(null);
+            return;
+          }
+          processedVideoData = {
+            type: "youtube",
+            videoId: videoId,
+            url: pendingVideoData,
+          };
+          break;
+
+        case "vimeo":
+        case "dailymotion":
+        case "twitch":
+        case "facebook":
+        case "instagram":
+        case "tiktok":
+        case "embed":
+          processedVideoData = {
+            type: videoType,
+            url: pendingVideoData,
+          };
+          break;
+
+        case "hls":
+          processedVideoData = {
+            type: "hls",
+            url: pendingVideoData,
+          };
+          break;
+
+        case "dash":
+        case "direct":
+        case "generic":
+          processedVideoData = {
+            type: videoType,
+            url: pendingVideoData,
+          };
+          break;
+
+        default:
+          // Accept any URL and try to play it as generic
+          processedVideoData = {
+            type: "generic",
+            url: pendingVideoData,
+          };
+          break;
+      }
+
+
+      
+      // Stop screen sharing first by triggering force stop
+      setForceStopScreenShare(true);
+      
+      // Don't clear video state immediately, let the server response handle it
+      // Reset force stop flag after a brief delay and set new video
+      setTimeout(() => {
+        setForceStopScreenShare(false);
+
+        // Then emit the new video to server
+        socket.emit("set-video", processedVideoData);
+        setError("");
+      }, 200); // Increased delay to ensure screen sharing stops properly
+    }
+
+    // Close popup and clear pending data
+    setShowScreenSharePopup(false);
+    setPendingVideoData(null);
+  }, [pendingVideoData, socket]);
+
+  const handleCancelVideoSet = useCallback(() => {
+    // Just close popup and clear pending data
+    setShowScreenSharePopup(false);
+    setPendingVideoData(null);
+  }, []);
 
   const handleCopyRoomCode = useCallback(async () => {
     try {
@@ -510,6 +617,11 @@ const RoomPage = ({
               onSyncVideo={handleSyncVideo}
               video={video}
               isHost={isHost}
+              socket={socket}
+              roomCode={roomCode}
+              username={username}
+              onScreenShare={handleScreenShare}
+              forceStopScreenShare={forceStopScreenShare}
             />
           )}
         </div>
@@ -563,6 +675,14 @@ const RoomPage = ({
           onSelectHost={setSelectedNewHost}
           onTransferHost={handleTransferHost}
           onCancel={handleCancelHostTransfer}
+        />
+      )}
+
+      {/* Screen Share Conflict Popup */}
+      {showScreenSharePopup && (
+        <ScreenShareConflictPopup
+          onStopAndSetVideo={handleStopScreenShareAndSetVideo}
+          onCancel={handleCancelVideoSet}
         />
       )}
     </div>
@@ -626,7 +746,7 @@ const HostTransferPopup = ({
   );
 };
 
-const VideoControls = ({ onSetVideo, onSyncVideo, video, isHost }) => {
+const VideoControls = ({ onSetVideo, onSyncVideo, video, isHost, socket, roomCode, username, onScreenShare, forceStopScreenShare }) => {
   const [videoUrl, setVideoUrl] = useState("");
 
   const handleSubmit = (e) => {
@@ -651,11 +771,11 @@ const VideoControls = ({ onSetVideo, onSyncVideo, video, isHost }) => {
             type="url"
             value={videoUrl}
             onChange={(e) => setVideoUrl(e.target.value)}
-            placeholder="Paste video URL here (YouTube, .m3u8, .mp4)..."
+            placeholder="Paste any video URL here (YouTube, Vimeo, direct links, streams)..."
           />
           <div className="video-buttons">
             <button type="submit">Set Video</button>
-            {video && isHost && (
+            {video && isHost && video.type !== 'screen-share' && (
               <button
                 type="button"
                 onClick={handleSync}
@@ -665,9 +785,54 @@ const VideoControls = ({ onSetVideo, onSyncVideo, video, isHost }) => {
                 🔄 Sync All
               </button>
             )}
+            <ScreenShare 
+              socket={socket}
+              roomCode={roomCode}
+              username={username}
+              onScreenShare={onScreenShare}
+              forceStop={forceStopScreenShare}
+            />
           </div>
         </div>
       </form>
+    </div>
+  );
+};
+
+const ScreenShareConflictPopup = ({ onStopAndSetVideo, onCancel }) => {
+  return (
+    <div className="popup-overlay">
+      <div className="screen-share-conflict-popup">
+        <div className="popup-header">
+          <h3>🖥️ Screen Share Active</h3>
+          <p>You are currently sharing your screen. Do you want to stop screen sharing and set the new video?</p>
+        </div>
+
+        <div className="popup-content">
+          <div className="conflict-info">
+            <div className="info-item">
+              <span className="info-icon">🖥️</span>
+              <span className="info-text">Currently sharing your screen</span>
+            </div>
+            <div className="info-item">
+              <span className="info-icon">🎬</span>
+              <span className="info-text">New video URL ready to set</span>
+            </div>
+          </div>
+          <div className="conflict-warning">
+            <p>⚠️ Setting a new video will stop your screen sharing session.</p>
+          </div>
+        </div>
+
+        <div className="popup-actions">
+          <button className="btn-cancel" onClick={onCancel}>
+            Cancel
+          </button>
+          <button className="btn-stop-and-set" onClick={onStopAndSetVideo}>
+            Stop Sharing & Set Video
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

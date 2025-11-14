@@ -1,0 +1,159 @@
+.screen-share-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.share-screen-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #5865f2;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 140px;
+  justify-content: center;
+}
+
+.share-screen-btn:hover {
+  background: #4752c4;
+  transform: translateY(-1px);
+}
+
+.share-screen-btn:active {
+  transform: translateY(0);
+}
+
+.btn-icon {
+  font-size: 16px;
+}
+
+.screen-share-active {
+  width: 100%;
+}
+
+.shared-screen-display {
+  background: #2f3136;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #5865f2;
+}
+
+.screen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #36393f;
+  border-bottom: 1px solid #40444b;
+}
+
+.sharing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ed4245;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.stop-share-btn-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #ed4245;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 140px;
+  justify-content: center;
+}
+
+.stop-share-btn-inline:hover {
+  background: #c23e41;
+  transform: translateY(-1px);
+}
+
+.stop-share-btn-inline:active {
+  transform: translateY(0);
+}
+
+.shared-screen-video {
+  width: 100%;
+  height: auto;
+  max-height: 400px;
+  object-fit: contain;
+  background: #000;
+}
+
+.remote-screens {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.remote-screen {
+  background: #2f3136;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #40444b;
+}
+
+.remote-screen-header {
+  padding: 12px 16px;
+  background: #36393f;
+  border-bottom: 1px solid #40444b;
+  color: #dcddde;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.remote-screen-video {
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+  object-fit: contain;
+  background: #000;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .share-screen-btn {
+    width: 100%;
+    min-width: unset;
+  }
+  
+  .screen-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  
+  .shared-screen-video,
+  .remote-screen-video {
+    max-height: 250px;
+  }
+}
+
+/* Animation for sharing indicator */
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+.sharing-indicator {
+  animation: pulse 2s infinite;
+}

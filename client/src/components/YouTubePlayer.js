@@ -4,19 +4,26 @@ import React, {
   forwardRef,
   useImperativeHandle,
   useCallback,
+  useState,
 } from "react";
+import youtubeAPI from "../utils/youtubeAPI";
 
 const YouTubePlayer = forwardRef(({ videoId, onVideoAction }, ref) => {
   const playerRef = useRef(null);
   const containerRef = useRef(null);
+  const playerDivRef = useRef(null);
   const isUserAction = useRef(false);
   const syncTimeout = useRef(null);
   const currentVideoId = useRef(null);
   const isPlayerReady = useRef(false);
+  const isMounted = useRef(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingError, setLoadingError] = useState(null);
+  const [playerReady, setPlayerReady] = useState(false);
 
   useImperativeHandle(ref, () => ({
     syncVideo: (data) => {
-      if (playerRef.current && !isUserAction.current && isPlayerReady.current) {
+      if (playerRef.current && !isUserAction.current && isPlayerReady.current && isMounted.current && playerRef.current.getPlayerState) {
         const player = playerRef.current;
         const currentTime = player.getCurrentTime();
         const targetTime = data.currentTime;
@@ -35,122 +42,205 @@ const YouTubePlayer = forwardRef(({ videoId, onVideoAction }, ref) => {
       }
     },
     getCurrentTime: () => {
-      console.log("🎥 getCurrentTime called");
-      if (playerRef.current && isPlayerReady.current) {
-        const time = playerRef.current.getCurrentTime();
-        console.log("🎥 Current time:", time);
-        return time;
+      if (playerRef.current && isPlayerReady.current && isMounted.current && playerRef.current.getCurrentTime) {
+        return playerRef.current.getCurrentTime();
       }
-      console.log("🎥 Player not ready, returning 0");
       return 0;
     },
     getPlayerState: () => {
-      console.log("🎥 getPlayerState called");
-      if (playerRef.current && isPlayerReady.current) {
-        const state = playerRef.current.getPlayerState();
-        console.log("🎥 Player state:", state);
-        return state;
+      if (playerRef.current && isPlayerReady.current && isMounted.current && playerRef.current.getPlayerState) {
+        return playerRef.current.getPlayerState();
       }
-      console.log("🎥 Player not ready, returning null");
       return null;
     },
   }));
 
   const onPlayerReady = useCallback((event) => {
-    isPlayerReady.current = true;
+    if (isMounted.current) {
+      isPlayerReady.current = true;
+      setPlayerReady(true);
+      setIsLoading(false);
+    }
   }, []);
 
   const onPlayerStateChange = useCallback(
     (event) => {
-      if (!isUserAction.current || !isPlayerReady.current) return;
+      if (!isUserAction.current || !isPlayerReady.current || !isMounted.current || !event.target) return;
 
-      const currentTime = event.target.getCurrentTime();
+      try {
+        const currentTime = event.target.getCurrentTime();
 
       // Clear any pending sync timeout
       if (syncTimeout.current) {
         clearTimeout(syncTimeout.current);
       }
 
-      // Debounce the action to avoid spam
-      syncTimeout.current = setTimeout(() => {
-        switch (event.data) {
-          case window.YT.PlayerState.PLAYING:
-            onVideoAction("play", currentTime);
-            break;
-          case window.YT.PlayerState.PAUSED:
-            onVideoAction("pause", currentTime);
-            break;
-          default:
-            break;
-        }
-        isUserAction.current = false;
-      }, 100);
+        // Debounce the action to avoid spam
+        syncTimeout.current = setTimeout(() => {
+          switch (event.data) {
+            case window.YT.PlayerState.PLAYING:
+              onVideoAction("play", currentTime);
+              break;
+            case window.YT.PlayerState.PAUSED:
+              onVideoAction("pause", currentTime);
+              break;
+            default:
+              break;
+          }
+          isUserAction.current = false;
+        }, 100);
+      } catch (error) {
+        console.warn('🎥 Error in onPlayerStateChange:', error);
+      }
     },
     [onVideoAction]
   );
 
   const initializePlayer = useCallback(() => {
-    if (containerRef.current && videoId && videoId !== currentVideoId.current) {
+    if (!isMounted.current || !containerRef.current || !videoId) return;
+    
+    // If we have an existing player and it's ready, just load the new video
+    if (playerRef.current && isPlayerReady.current && videoId !== currentVideoId.current) {
+      try {
+        setIsLoading(true);
+        setPlayerReady(false);
+        playerRef.current.loadVideoById(videoId);
+        currentVideoId.current = videoId;
+        // Loading state will be cleared by onPlayerReady
+        return;
+      } catch (error) {
+        console.warn('🎥 Error loading video by ID, recreating player:', error);
+        // Fall through to recreate player
+      }
+    }
+
+    // Only create new player if we don't have one or if it's not working
+    if (!playerRef.current || !isPlayerReady.current) {
+      
       // Destroy existing player if it exists
       if (playerRef.current && playerRef.current.destroy) {
-        playerRef.current.destroy();
-        isPlayerReady.current = false;
+        try {
+          isPlayerReady.current = false;
+          setPlayerReady(false);
+          playerRef.current.destroy();
+          playerRef.current = null;
+        } catch (error) {
+          console.warn('🎥 Error destroying YouTube player:', error);
+        }
       }
 
-      // Clear the container
-      containerRef.current.innerHTML = "";
+      // Create a new div for the YouTube player
+      if (containerRef.current) {
+        // Remove old player div if it exists
+        if (playerDivRef.current && playerDivRef.current.parentNode) {
+          try {
+            playerDivRef.current.parentNode.removeChild(playerDivRef.current);
+          } catch (error) {
+            console.warn('🎥 Error removing old player div:', error);
+          }
+        }
+        
+        // Create new player div
+        playerDivRef.current = document.createElement('div');
+        playerDivRef.current.style.width = '100%';
+        playerDivRef.current.style.height = '100%';
+        containerRef.current.appendChild(playerDivRef.current);
+      }
 
       // Create new player
-      playerRef.current = new window.YT.Player(containerRef.current, {
-        height: "100%",
-        width: "100%",
-        videoId: videoId,
-        playerVars: {
-          autoplay: 0,
-          controls: 1,
-          disablekb: 0,
-          enablejsapi: 1,
-          fs: 1,
-          modestbranding: 1,
-          playsinline: 1,
-          rel: 0,
-        },
-        events: {
-          onReady: onPlayerReady,
-          onStateChange: onPlayerStateChange,
-        },
-      });
+      try {
+        if (!playerDivRef.current || !isMounted.current) return;
 
-      currentVideoId.current = videoId;
-    } else if (
-      playerRef.current &&
-      videoId &&
-      videoId !== currentVideoId.current &&
-      isPlayerReady.current
-    ) {
-      // Just change the video without recreating the player
-      playerRef.current.loadVideoById(videoId);
-      currentVideoId.current = videoId;
+        setIsLoading(true);
+        setPlayerReady(false);
+        playerRef.current = new window.YT.Player(playerDivRef.current, {
+          height: "100%",
+          width: "100%",
+          videoId: videoId,
+          playerVars: {
+            autoplay: 0,
+            controls: 1,
+            disablekb: 0,
+            enablejsapi: 1,
+            fs: 1,
+            modestbranding: 1,
+            playsinline: 1,
+            rel: 0,
+          },
+          events: {
+            onReady: onPlayerReady,
+            onStateChange: onPlayerStateChange,
+            onError: (event) => {
+              console.error('🎥 YouTube player error:', event.data);
+              setLoadingError(`YouTube error: ${event.data}`);
+              setIsLoading(false);
+            }
+          },
+        });
+
+        currentVideoId.current = videoId;
+        
+        // Fallback timeout in case onPlayerReady doesn't fire
+        setTimeout(() => {
+          if (isLoading && isMounted.current) {
+            setIsLoading(false);
+            setPlayerReady(true);
+          }
+        }, 10000); // 10 second timeout
+        
+      } catch (error) {
+        console.error('🎥 Error creating YouTube player:', error);
+        setLoadingError(error.message);
+        setIsLoading(false);
+      }
     }
   }, [videoId, onPlayerReady, onPlayerStateChange]);
 
   useEffect(() => {
-    // Load YouTube IFrame API only once
-    if (!window.YT) {
-      const tag = document.createElement("script");
-      tag.src = "https://www.youtube.com/iframe_api";
-      const firstScriptTag = document.getElementsByTagName("script")[0];
-      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    let mounted = true;
 
-      window.onYouTubeIframeAPIReady = () => {
-        initializePlayer();
-      };
-    } else {
-      initializePlayer();
-    }
+    const loadAndInitialize = async () => {
+      try {
+        setIsLoading(true);
+        setLoadingError(null);
+        
+        // Use the global API loader
+        await youtubeAPI.load();
+        
+        if (mounted && isMounted.current) {
+          initializePlayer();
+          
+          // Additional fallback: check if player becomes ready after a short delay
+          setTimeout(() => {
+            if (mounted && isMounted.current && playerRef.current && isLoading) {
+              try {
+                // Try to check if player is actually ready
+                const state = playerRef.current.getPlayerState();
+                if (state !== undefined && state !== null) {
+                  setIsLoading(false);
+                  setPlayerReady(true);
+                  isPlayerReady.current = true;
+                }
+              } catch (error) {
+                // Player not ready yet, keep loading
+              }
+            }
+          }, 2000); // Check after 2 seconds
+        }
+      } catch (error) {
+        console.error('Failed to load YouTube API:', error);
+        if (mounted) {
+          setLoadingError(error.message);
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadAndInitialize();
 
     // Cleanup
     return () => {
+      mounted = false;
       if (syncTimeout.current) {
         clearTimeout(syncTimeout.current);
       }
@@ -159,9 +249,36 @@ const YouTubePlayer = forwardRef(({ videoId, onVideoAction }, ref) => {
 
   // Only destroy player on unmount, not on re-renders
   useEffect(() => {
+    isMounted.current = true;
+    
     return () => {
+      isMounted.current = false;
+      isPlayerReady.current = false;
+      
+      // Clear any pending timeouts first
+      if (syncTimeout.current) {
+        clearTimeout(syncTimeout.current);
+        syncTimeout.current = null;
+      }
+      
+      // Destroy player safely
       if (playerRef.current && playerRef.current.destroy) {
-        playerRef.current.destroy();
+        try {
+          playerRef.current.destroy();
+        } catch (error) {
+          console.warn('🎥 Error destroying YouTube player on unmount:', error);
+        }
+        playerRef.current = null;
+      }
+      
+      // Remove player div safely
+      if (playerDivRef.current && playerDivRef.current.parentNode) {
+        try {
+          playerDivRef.current.parentNode.removeChild(playerDivRef.current);
+        } catch (error) {
+          console.warn('🎥 Error removing player div on unmount:', error);
+        }
+        playerDivRef.current = null;
       }
     };
   }, []);
@@ -184,15 +301,108 @@ const YouTubePlayer = forwardRef(({ videoId, onVideoAction }, ref) => {
     }
   }, []);
 
+  const setContainerRef = useCallback((node) => {
+    if (node) {
+      containerRef.current = node;
+    } else {
+      // Component is unmounting, clean up
+      if (containerRef.current) {
+        containerRef.current = null;
+      }
+    }
+  }, []);
+
   return (
     <div
-      ref={containerRef}
       style={{
         width: "100%",
         height: "100%",
         backgroundColor: "#000",
+        position: "relative",
       }}
-    />
+    >
+      <div
+        ref={setContainerRef}
+        style={{
+          width: "100%",
+          height: "100%",
+          position: "absolute",
+          top: 0,
+          left: 0,
+        }}
+      />
+      
+      {/* Loading indicator */}
+      {(isLoading || !playerReady) && !loadingError && (
+        <div
+          onClick={() => {
+            setIsLoading(false);
+            setPlayerReady(true);
+          }}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(0, 0, 0, 0.8)",
+            color: "#fff",
+            fontSize: "16px",
+            zIndex: 1000,
+            cursor: "pointer",
+          }}
+        >
+          <div style={{ textAlign: "center" }}>
+            <div
+              style={{
+                width: "40px",
+                height: "40px",
+                border: "3px solid #333",
+                borderTop: "3px solid #fff",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite",
+                margin: "0 auto 10px",
+              }}
+            />
+            Loading YouTube video...
+            <div style={{ fontSize: "12px", marginTop: "10px", opacity: 0.7 }}>
+              Click to dismiss if stuck
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Error indicator */}
+      {loadingError && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(0, 0, 0, 0.8)",
+            color: "#ff6b6b",
+            fontSize: "16px",
+            zIndex: 1000,
+          }}
+        >
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "24px", marginBottom: "10px" }}>⚠️</div>
+            Failed to load YouTube video
+            <div style={{ fontSize: "12px", marginTop: "5px", opacity: 0.7 }}>
+              {loadingError}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 });
 

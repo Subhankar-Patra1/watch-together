@@ -161,6 +161,28 @@ const RoomPage = ({
       setTimeout(() => setError(""), 5000);
     });
 
+    // Screen sharing room state events
+    socket.on("room-screen-share-started", (data) => {
+      console.log('🖥️ Room screen share started by:', data.username);
+      // Don't override if it's our own screen share
+      if (data.username !== username) {
+        // Show placeholder for remote screen share
+        setVideo({
+          type: 'screen-share-remote',
+          username: data.username,
+          message: `${data.username} is sharing their screen`
+        });
+      }
+    });
+
+    socket.on("room-screen-share-stopped", (data) => {
+      console.log('🖥️ Room screen share stopped by:', data.username);
+      // Clear video if it was a screen share
+      if (video && (video.type === 'screen-share' || video.type === 'screen-share-remote')) {
+        setVideo(null);
+      }
+    });
+
     return () => {
       socket.off("room-joined");
       socket.off("initial-video-sync");
@@ -176,6 +198,8 @@ const RoomPage = ({
       socket.off("user-typing");
       socket.off("host-status");
       socket.off("error");
+      socket.off("room-screen-share-started");
+      socket.off("room-screen-share-stopped");
     };
   }, [socket]);
 
@@ -332,13 +356,27 @@ const RoomPage = ({
 
   const handleScreenShare = useCallback((screenShareData) => {
     if (screenShareData) {
-      // Set screen share as the main video
+      // Set screen share as the main video locally
       setVideo(screenShareData);
+      
+      // Notify server about screen share (for room state sync)
+      socket.emit('room-screen-share-active', {
+        roomCode,
+        username,
+        isActive: true
+      });
     } else {
-      // Clear screen share
+      // Clear screen share locally
       setVideo(null);
+      
+      // Notify server that screen share stopped
+      socket.emit('room-screen-share-active', {
+        roomCode,
+        username,
+        isActive: false
+      });
     }
-  }, []);
+  }, [socket, roomCode, username]);
 
   const handleStopScreenShareAndSetVideo = useCallback(() => {
     if (pendingVideoData) {

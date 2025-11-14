@@ -18,9 +18,13 @@ const extractYouTubeVideoId = (url) => {
 };
 
 const detectVideoType = (videoData) => {
-  // Handle screen share type
+  // Handle screen share types
   if (videoData && videoData.type === 'screen-share') {
     return 'screen-share';
+  }
+  
+  if (videoData && videoData.type === 'screen-share-remote') {
+    return 'screen-share-remote';
   }
 
   const url = videoData?.url || videoData;
@@ -182,6 +186,31 @@ const UniversalPlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
           videoData={videoData}
           onVideoAction={onVideoAction}
         />
+      );
+    
+    case "screen-share-remote":
+      return (
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            backgroundColor: "#1a1a1a",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#fff",
+            flexDirection: "column",
+            gap: "20px"
+          }}
+        >
+          <div style={{ fontSize: "48px" }}>🖥️</div>
+          <div style={{ fontSize: "18px", textAlign: "center" }}>
+            {videoData.message || `${videoData.username} is sharing their screen`}
+          </div>
+          <div style={{ fontSize: "14px", opacity: 0.7, textAlign: "center" }}>
+            Waiting for screen share connection...
+          </div>
+        </div>
       );
     case "youtube":
       const videoId = extractYouTubeVideoId(videoData.url);

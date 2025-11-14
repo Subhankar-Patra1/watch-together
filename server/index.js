@@ -1027,6 +1027,42 @@ io.on("connection", (socket) => {
     });
   });
 
+  // Room-level screen sharing state management
+  socket.on("room-screen-share-active", (data) => {
+    console.log(`Room screen share ${data.isActive ? 'started' : 'stopped'} by ${data.username} in room ${data.roomCode}`);
+    
+    const room = rooms.get(data.roomCode);
+    if (room) {
+      if (data.isActive) {
+        // Set screen share as active in room state
+        room.screenShare = {
+          active: true,
+          username: data.username,
+          socketId: socket.id
+        };
+        
+        // Notify all other users in the room
+        socket.to(data.roomCode).emit("room-screen-share-started", {
+          username: data.username,
+          socketId: socket.id
+        });
+      } else {
+        // Clear screen share from room state
+        room.screenShare = {
+          active: false,
+          username: null,
+          socketId: null
+        };
+        
+        // Notify all other users in the room
+        socket.to(data.roomCode).emit("room-screen-share-stopped", {
+          username: data.username,
+          socketId: socket.id
+        });
+      }
+    }
+  });
+
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
 

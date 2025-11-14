@@ -140,6 +140,20 @@ const RoomPage = ({
       setVideo(data.video);
       setIsHost(data.isHost);
       setError("");
+
+      // If a screen share is already active when we join, proactively request the WebRTC stream
+      try {
+        if (data.video && data.video.type === 'screen-share' && data.video.socketId && data.video.socketId !== socket.id) {
+          console.log('🖥️ Detected active screen share on join. Requesting WebRTC from:', data.video.socketId);
+          socket.emit('request-screen-share-webrtc', {
+            roomCode,
+            to: data.video.socketId,
+            from: socket.id
+          });
+        }
+      } catch (err) {
+        console.warn('⚠️ Error requesting screen share on join:', err);
+      }
     });
 
     socket.on("initial-video-sync", (data) => {

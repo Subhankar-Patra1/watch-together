@@ -153,6 +153,8 @@ const YouTubePlayer = forwardRef(({ videoId, onVideoAction }, ref) => {
 
         setIsLoading(true);
         setPlayerReady(false);
+        const origin = window.location.origin;
+        const widgetReferrer = window.location.href;
         playerRef.current = new window.YT.Player(playerDivRef.current, {
           height: "100%",
           width: "100%",
@@ -166,13 +168,22 @@ const YouTubePlayer = forwardRef(({ videoId, onVideoAction }, ref) => {
             modestbranding: 1,
             playsinline: 1,
             rel: 0,
+            origin,
+            widget_referrer: widgetReferrer
           },
           events: {
             onReady: onPlayerReady,
             onStateChange: onPlayerStateChange,
             onError: (event) => {
               console.error('🎥 YouTube player error:', event.data);
-              setLoadingError(`YouTube error: ${event.data}`);
+              // Provide a clearer explanation for common restriction errors
+              if (event.data === 150 || event.data === 101) {
+                setLoadingError(
+                  'YouTube error 150/101: The video is restricted for embedding or requires sign-in on YouTube. Click "Watch on YouTube" to open it directly.'
+                );
+              } else {
+                setLoadingError(`YouTube error: ${event.data}`);
+              }
               setIsLoading(false);
             }
           },
@@ -399,6 +410,18 @@ const YouTubePlayer = forwardRef(({ videoId, onVideoAction }, ref) => {
             <div style={{ fontSize: "12px", marginTop: "5px", opacity: 0.7 }}>
               {loadingError}
             </div>
+            {(String(loadingError).includes('150') || String(loadingError).includes('101')) && (
+              <div style={{ marginTop: 12 }}>
+                <a
+                  href={`https://www.youtube.com/watch?v=${videoId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: '#4ECDC4', textDecoration: 'underline' }}
+                >
+                  Watch on YouTube
+                </a>
+              </div>
+            )}
           </div>
         </div>
       )}

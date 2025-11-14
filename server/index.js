@@ -49,6 +49,33 @@ app.use(
 );
 app.use(express.json());
 
+// Health check endpoint
+app.get("/", (req, res) => {
+  res.json({
+    status: "OK",
+    message: "WatchTogether Server is running!",
+    timestamp: new Date().toISOString(),
+    version: "2.0.0",
+    features: [
+      "Universal Video Support",
+      "Screen Sharing", 
+      "Voice Chat",
+      "Real-time Sync"
+    ]
+  });
+});
+
+// API health check
+app.get("/health", (req, res) => {
+  res.json({
+    status: "healthy",
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    rooms: rooms.size,
+    totalUsers: Array.from(rooms.values()).reduce((total, room) => total + room.users.length, 0)
+  });
+});
+
 // Store room data in memory (use Redis/MongoDB for production)
 const rooms = new Map();
 

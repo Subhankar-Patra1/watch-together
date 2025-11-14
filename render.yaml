@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: free
     buildCommand: cd server && npm install
-    startCommand: cd server && npm start
+    startCommand: node server-deploy.js
     envVars:
       - key: NODE_ENV
         value: production

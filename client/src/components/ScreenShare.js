@@ -8,7 +8,8 @@ const ScreenShare = ({
   onScreenShare,
   forceStop = false,
   canShare = true,
-  showControls = true
+  showControls = true,
+  activeShareUsername = null
 }) => {
   const [isSharing, setIsSharing] = useState(false);
   const [sharedStream, setSharedStream] = useState(null);
@@ -59,6 +60,7 @@ const ScreenShare = ({
   const [remoteStream, setRemoteStream] = useState(null);
   const receiverConnectionsRef = useRef(new Map());
   const senderConnectionsRef = useRef(new Map());
+  const sharerNamesRef = useRef(new Map());
 
   // Create WebRTC connection for receiving screen shares
   const createReceiverConnection = useCallback(async (sharerSocketId) => {
@@ -79,10 +81,12 @@ const ScreenShare = ({
       
       // Show the actual screen share stream
       if (onScreenShare) {
+        const nameFromMap = sharerNamesRef.current.get(sharerSocketId);
+        const displayName = nameFromMap || activeShareUsername || 'Screen Share';
         onScreenShare({
           type: 'screen-share',
           stream: stream,
-          username: 'Remote Screen Share',
+          username: displayName,
           isRemote: true
         });
       }
@@ -102,7 +106,7 @@ const ScreenShare = ({
 
     receiverConnectionsRef.current.set(sharerSocketId, pc);
     return pc;
-  }, [socket, roomCode, onScreenShare]);
+  }, [socket, roomCode, onScreenShare, activeShareUsername]);
 
   // Create WebRTC connection for sending screen shares
   const createSenderConnection = useCallback(async (receiverSocketId, stream) => {
@@ -140,6 +144,10 @@ const ScreenShare = ({
     // WebRTC signaling for screen sharing
     socket.on('screen-share-started', async (data) => {
       console.log('🎬 Screen share started by:', data.username, 'socketId:', data.socketId);
+      // Cache sharer name for display when the track arrives
+      if (data.socketId && data.username) {
+        sharerNamesRef.current.set(data.socketId, data.username);
+      }
       
       if (data.username !== username) {
         console.log('📡 Requesting WebRTC connection for screen share from:', data.socketId);
@@ -243,6 +251,10 @@ const ScreenShare = ({
 
     socket.on('screen-share-stopped', (data) => {
       console.log('🛑 Screen share stopped by:', data.username);
+      // Clear cached name
+      if (data.socketId) {
+        sharerNamesRef.current.delete(data.socketId);
+      }
 
       receiverConnectionsRef.current.forEach((pc, sharerId) => {
         try {

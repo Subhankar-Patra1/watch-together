@@ -776,6 +776,7 @@ const RoomPage = ({
               forceStop={false}
               canShare={false}
               showControls={false}
+              activeShareUsername={video && video.type === 'screen-share' ? video.username : null}
             />
           )}
 

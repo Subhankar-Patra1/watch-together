@@ -117,6 +117,8 @@ const detectVideoType = (videoData) => {
 
 const UniversalPlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
 
+  // Debug: Log the received video data
+  console.log('🎬 UniversalPlayer received videoData:', videoData);
 
   // Check if we have valid video data
   if (!videoData) {
@@ -137,9 +139,10 @@ const UniversalPlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
     );
   }
 
-  // For screen share, we don't need a URL, we need a stream
+  // For screen share, check if it's remote or local
   if (videoData.type === 'screen-share') {
-    if (!videoData.stream) {
+    // Local screen share (sharer) needs a stream
+    if (!videoData.stream && !videoData.isRemote && !videoData.socketId) {
       return (
         <div
           style={{
@@ -176,11 +179,13 @@ const UniversalPlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
   }
 
   const videoType = detectVideoType(videoData);
+  console.log('🎬 Detected video type:', videoType, 'for data:', videoData);
 
   switch (videoType) {
     case "screen-share":
       // Check if it's a remote screen share or local
-      if (videoData.isRemote || videoData.socketId) {
+      // Remote screen share: has socketId but no stream, or explicitly marked as remote
+      if (videoData.isRemote || (videoData.socketId && !videoData.stream)) {
         return (
           <div
             style={{

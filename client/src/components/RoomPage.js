@@ -178,11 +178,19 @@ const RoomPage = ({
     });
 
     socket.on("video-set", (data) => {
+      console.log("📺 Received video-set:", data.video);
       setVideo(data.video);
     });
 
     socket.on("video-sync", (data) => {
       console.log("📡 Received video-sync:", data);
+      
+      // Don't sync if we're in screen sharing mode
+      if (video && video.type === 'screen-share') {
+        console.log("📡 Ignoring video-sync during screen sharing");
+        return;
+      }
+      
       if (playerRef.current) {
         console.log("📡 Calling syncVideo on player");
         playerRef.current.syncVideo(data);
@@ -253,18 +261,8 @@ const RoomPage = ({
       console.log('🖥️ Current username:', username);
       console.log('🖥️ Current video state:', video);
       
-      // Don't override if it's our own screen share
-      if (data.username !== username) {
-        console.log('🖥️ Setting remote screen share placeholder');
-        // Show placeholder for remote screen share
-        setVideo({
-          type: 'screen-share-remote',
-          username: data.username,
-          message: `${data.username} is sharing their screen`
-        });
-      } else {
-        console.log('🖥️ Ignoring own screen share notification');
-      }
+      // Always set screen share state (the server should handle this via video-set)
+      console.log('🖥️ Screen share should be handled by video-set event from server');
     });
 
     socket.on("room-screen-share-stopped", (data) => {
@@ -281,10 +279,8 @@ const RoomPage = ({
         });
       }
       
-      // Clear video if it was a screen share
-      if (video && (video.type === 'screen-share' || video.type === 'screen-share-remote')) {
-        setVideo(null);
-      }
+      // Screen share stop should be handled by video-set event from server
+      console.log('🖥️ Screen share stop should be handled by video-set event from server');
     });
 
     return () => {
@@ -467,27 +463,16 @@ const RoomPage = ({
 
   const handleScreenShare = useCallback((screenShareData) => {
     if (screenShareData) {
-      // Set screen share as the main video locally
+      // Set screen share as the main video locally (for the sharer)
       setVideo(screenShareData);
-      
-      // Notify server about screen share (for room state sync)
-      socket.emit('room-screen-share-active', {
-        roomCode,
-        username,
-        isActive: true
-      });
+      console.log('🖥️ Local screen share set for sharer');
     } else {
-      // Clear screen share locally
+      // Clear screen share locally (for the sharer)
       setVideo(null);
-      
-      // Notify server that screen share stopped
-      socket.emit('room-screen-share-active', {
-        roomCode,
-        username,
-        isActive: false
-      });
+      console.log('🖥️ Local screen share cleared for sharer');
     }
-  }, [socket, roomCode, username]);
+    // Note: Server coordination is handled by ScreenShare component via socket events
+  }, []);
 
   const handleStopScreenShareAndSetVideo = useCallback(() => {
     if (pendingVideoData) {

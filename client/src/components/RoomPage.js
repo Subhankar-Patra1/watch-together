@@ -774,6 +774,7 @@ const RoomPage = ({
               canShare={false}
               showControls={false}
               activeShareUsername={video && video.type === 'screen-share' ? video.username : null}
+              activeShareSocketId={video && video.type === 'screen-share' ? video.socketId : null}
             />
           )}
 

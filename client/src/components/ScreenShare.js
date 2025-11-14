@@ -10,7 +10,8 @@ const ScreenShare = ({
   forceStop = false,
   canShare = true,
   showControls = true,
-  activeShareUsername = null
+  activeShareUsername = null,
+  activeShareSocketId = null
 }) => {
   const [isSharing, setIsSharing] = useState(false);
   const [sharedStream, setSharedStream] = useState(null);
@@ -62,6 +63,8 @@ const ScreenShare = ({
   const receiverConnectionsRef = useRef(new Map());
   const senderConnectionsRef = useRef(new Map());
   const sharerNamesRef = useRef(new Map());
+  const activeSharerSocketRef = useRef(activeShareSocketId);
+  useEffect(() => { activeSharerSocketRef.current = activeShareSocketId; }, [activeShareSocketId]);
 
   // Create WebRTC connection for receiving screen shares
   const createReceiverConnection = useCallback(async (sharerSocketId) => {
@@ -85,6 +88,44 @@ const ScreenShare = ({
           username: displayName,
           isRemote: true
         });
+      }
+    };
+
+    // Connection diagnostics & auto-retry logic
+    pc.onconnectionstatechange = () => {
+      console.log('📡 Receiver connection state:', pc.connectionState);
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        // Request fresh WebRTC after brief backoff
+        setTimeout(() => {
+          if (pc.connectionState !== 'connected') {
+            console.log('🔄 Re-requesting screen share due to state:', pc.connectionState);
+            socket.emit('request-screen-share-webrtc', {
+              roomCode,
+              to: sharerSocketId,
+              from: socket.id
+            });
+          }
+        }, 1500);
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('🧊 Receiver ICE state:', pc.iceConnectionState);
+      if (pc.iceConnectionState === 'failed') {
+        // ICE restart attempt
+        if (pc.signalingState === 'stable') {
+          console.log('🧊 Attempting ICE restart');
+          pc.createOffer({ iceRestart: true }).then(offer => {
+            pc.setLocalDescription(offer).then(() => {
+              socket.emit('webrtc-offer', {
+                roomCode,
+                to: sharerSocketId,
+                from: socket.id,
+                offer
+              });
+            });
+          }).catch(err => console.warn('ICE restart failed:', err));
+        }
       }
     };
 
@@ -127,6 +168,13 @@ const ScreenShare = ({
       }
     };
 
+    pc.onconnectionstatechange = () => {
+      console.log('📡 Sender connection state:', pc.connectionState, 'to', receiverSocketId);
+    };
+    pc.oniceconnectionstatechange = () => {
+      console.log('🧊 Sender ICE state:', pc.iceConnectionState, 'to', receiverSocketId);
+    };
+
     senderConnectionsRef.current.set(receiverSocketId, pc);
     return pc;
   }, [socket, roomCode]);
@@ -138,6 +186,7 @@ const ScreenShare = ({
       // Cache sharer name for display when the track arrives
       if (data.socketId && data.username) {
         sharerNamesRef.current.set(data.socketId, data.username);
+        activeSharerSocketRef.current = data.socketId;
       }
       
       if (data.username !== username) {
@@ -288,6 +337,44 @@ const ScreenShare = ({
       socket.off('screen-share-stopped');
     };
   }, [socket, username, onScreenShare, isSharing, sharedStream, createReceiverConnection, createSenderConnection]);
+
+  // Handle reconnection (network change / WiFi switch)
+  useEffect(() => {
+    const handleReconnect = () => {
+      const sharerId = activeSharerSocketRef.current;
+      if (sharerId) {
+        console.log('🔄 Socket reconnected; re-requesting screen share from', sharerId);
+        socket.emit('request-screen-share-webrtc', {
+          roomCode,
+          to: sharerId,
+          from: socket.id
+        });
+      }
+    };
+    socket.on('connect', handleReconnect);
+    socket.io && socket.io.on && socket.io.on('reconnect', handleReconnect);
+    return () => {
+      socket.off('connect', handleReconnect);
+      socket.io && socket.io.off && socket.io.off('reconnect', handleReconnect);
+    };
+  }, [socket, roomCode]);
+
+  // If we requested but no remote stream after timeout, retry once
+  useEffect(() => {
+    if (activeShareSocketId && !remoteStream) {
+      const t = setTimeout(() => {
+        if (!remoteStream) {
+          console.log('⏱️ No remote stream yet, retrying request to', activeShareSocketId);
+          socket.emit('request-screen-share-webrtc', {
+            roomCode,
+            to: activeShareSocketId,
+            from: socket.id
+          });
+        }
+      }, 5000);
+      return () => clearTimeout(t);
+    }
+  }, [activeShareSocketId, remoteStream, socket, roomCode]);
 
   const handleStartScreenShare = async (stream) => {
     try {

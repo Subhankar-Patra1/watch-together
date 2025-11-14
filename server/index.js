@@ -1023,23 +1023,27 @@ io.on("connection", (socket) => {
 
   // WebRTC signaling for screen sharing
   socket.on("request-screen-share-webrtc", (data) => {
-    console.log(`📡 WebRTC screen share request from ${data.from} to ${data.to}`);
+    console.log(`📡 SERVER: WebRTC screen share request from ${data.from} to ${data.to} in room ${data.roomCode}`);
     socket.to(data.to).emit("request-screen-share-webrtc", data);
+    console.log(`📡 SERVER: Forwarded WebRTC request to ${data.to}`);
   });
 
   socket.on("webrtc-offer", (data) => {
-    console.log(`📤 WebRTC offer from ${data.from} to ${data.to}`);
+    console.log(`📤 SERVER: WebRTC offer from ${data.from} to ${data.to} in room ${data.roomCode}`);
     socket.to(data.to).emit("webrtc-offer", data);
+    console.log(`📤 SERVER: Forwarded WebRTC offer to ${data.to}`);
   });
 
   socket.on("webrtc-answer", (data) => {
-    console.log(`📨 WebRTC answer from ${data.from} to ${data.to}`);
+    console.log(`📨 SERVER: WebRTC answer from ${data.from} to ${data.to} in room ${data.roomCode}`);
     socket.to(data.to).emit("webrtc-answer", data);
+    console.log(`📨 SERVER: Forwarded WebRTC answer to ${data.to}`);
   });
 
   socket.on("webrtc-ice-candidate", (data) => {
-    console.log(`🧊 WebRTC ICE candidate from ${data.from} to ${data.to}`);
+    console.log(`🧊 SERVER: WebRTC ICE candidate from ${data.from} to ${data.to} in room ${data.roomCode}`);
     socket.to(data.to).emit("webrtc-ice-candidate", data);
+    console.log(`🧊 SERVER: Forwarded ICE candidate to ${data.to}`);
   });
 
   // Room-level screen sharing state management

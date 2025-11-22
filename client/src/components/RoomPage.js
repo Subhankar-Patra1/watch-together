@@ -117,6 +117,30 @@ const RoomPage = ({
       }
     };
 
+    const handleGlobalScreenShareAnswer = async (data) => {
+      console.log('🌐 Global: Received screen share answer from:', data.from);
+      try {
+        const pc = globalPeerConnections.get(data.from);
+        if (pc) {
+          await pc.setRemoteDescription(data.answer);
+        }
+      } catch (error) {
+        console.error('🌐 Global: Error handling screen share answer:', error);
+      }
+    };
+
+    const handleGlobalScreenShareIceCandidate = async (data) => {
+      console.log('🌐 Global: Received ICE candidate from:', data.from);
+      try {
+        const pc = globalPeerConnections.get(data.from);
+        if (pc) {
+          await pc.addIceCandidate(data.candidate);
+        }
+      } catch (error) {
+        console.error('🌐 Global: Error handling ICE candidate:', error);
+      }
+    };
+
     // Add global listeners
     socket.on('screen-share-offer', handleGlobalScreenShareOffer);
     socket.on('screen-share-answer', handleGlobalScreenShareAnswer);

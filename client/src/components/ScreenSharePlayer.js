@@ -1,21 +1,5 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle, useState } from 'react';
 import './ScreenSharePlayer.css';
-
-const ScreenSharePlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
-  const videoRef = useRef(null);
-  const [volume, setVolume] = useState(0.6);
-  const [isMuted, setIsMuted] = useState(false);
-
-  useImperativeHandle(ref, () => ({
-    getCurrentTime: () => videoRef.current ? videoRef.current.currentTime : 0,
-    getPlayerState: () => !videoRef.current ? 0 : (videoRef.current.paused ? 2 : 1),
-    syncVideo: () => console.log('Screen share sync ignored - live stream')
-  }));
-
-  // Video Watchdog: Monitor playback progress to detect frozen streams
-  useEffect(() => {
-    if (!videoData?.stream || !videoRef.current) return;
-
     let lastTime = 0;
     let sameTimeCount = 0;
     const checkInterval = 1000; // Check every second

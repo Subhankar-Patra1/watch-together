@@ -16,48 +16,6 @@ const ScreenShare = ({
   const [isSharing, setIsSharing] = useState(false);
   const [sharedStream, setSharedStream] = useState(null);
 
-  const handleStopScreenShare = useCallback(() => {
-    if (sharedStream) {
-      // Stop all tracks
-      sharedStream.getTracks().forEach(track => track.stop());
-      setSharedStream(null);
-    }
-
-    setIsSharing(false);
-
-    // Clear the main video area locally
-    if (onScreenShare) {
-      onScreenShare(null);
-    }
-
-    // Close all outgoing WebRTC connections
-    senderConnectionsRef.current.forEach((pc, receiverId) => {
-      try {
-        pc.close();
-        console.log('🔚 Closed sender connection for', receiverId);
-      } catch (err) {
-        console.warn('Error closing sender connection:', err);
-      }
-    });
-    senderConnectionsRef.current.clear();
-
-    // Notify server that screen sharing stopped (server will broadcast to all)
-    socket.emit('screen-share-stopped', {
-      roomCode,
-      username,
-      socketId: socket.id
-    });
-
-    console.log('🛑 Screen sharing stopped');
-  }, [sharedStream, onScreenShare, socket, roomCode, username]);
-
-  useEffect(() => {
-    // Handle force stop from parent component
-    if (forceStop && isSharing) {
-      handleStopScreenShare();
-    }
-  }, [forceStop, isSharing, handleStopScreenShare]);
-
   // WebRTC state for receiving/sending screen shares
   const [remoteStream, setRemoteStream] = useState(null);
   const receiverConnectionsRef = useRef(new Map());
@@ -65,6 +23,7 @@ const ScreenShare = ({
   const sharerNamesRef = useRef(new Map());
   const activeSharerSocketRef = useRef(activeShareSocketId);
   useEffect(() => { activeSharerSocketRef.current = activeShareSocketId; }, [activeShareSocketId]);
+  
   // Fallback frame relay (for networks where WebRTC fails). Sends low-fps JPEGs via socket.
   const fallbackFrameIntervalRef = useRef(null);
 
@@ -113,6 +72,49 @@ const ScreenShare = ({
       fallbackFrameIntervalRef.current = null;
     }
   }, []);
+
+  const handleStopScreenShare = useCallback(() => {
+    if (sharedStream) {
+      // Stop all tracks
+      sharedStream.getTracks().forEach(track => track.stop());
+      setSharedStream(null);
+    }
+
+    setIsSharing(false);
+    stopFallbackFrames();
+
+    // Clear the main video area locally
+    if (onScreenShare) {
+      onScreenShare(null);
+    }
+
+    // Close all outgoing WebRTC connections
+    senderConnectionsRef.current.forEach((pc, receiverId) => {
+      try {
+        pc.close();
+        console.log('🔚 Closed sender connection for', receiverId);
+      } catch (err) {
+        console.warn('Error closing sender connection:', err);
+      }
+    });
+    senderConnectionsRef.current.clear();
+
+    // Notify server that screen sharing stopped (server will broadcast to all)
+    socket.emit('screen-share-stopped', {
+      roomCode,
+      username,
+      socketId: socket.id
+    });
+
+    console.log('🛑 Screen sharing stopped');
+  }, [sharedStream, onScreenShare, socket, roomCode, username, stopFallbackFrames]);
+
+  useEffect(() => {
+    // Handle force stop from parent component
+    if (forceStop && isSharing) {
+      handleStopScreenShare();
+    }
+  }, [forceStop, isSharing, handleStopScreenShare]);
 
   // Create WebRTC connection for receiving screen shares
   const createReceiverConnection = useCallback(async (sharerSocketId) => {
@@ -231,6 +233,9 @@ const ScreenShare = ({
 
     pc.onconnectionstatechange = () => {
       console.log('📡 Sender connection state:', pc.connectionState, 'to', receiverSocketId);
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        console.warn('🚨 Sender connection failed, ensuring fallback frames are active');
+      }
     };
     pc.oniceconnectionstatechange = () => {
       console.log('🧊 Sender ICE state:', pc.iceConnectionState, 'to', receiverSocketId);
@@ -441,6 +446,7 @@ const ScreenShare = ({
     try {
       setSharedStream(stream);
       setIsSharing(true);
+      startFallbackFrames(stream); // Start fallback frames immediately
 
       // Set the screen share as the main video using the callback
       const screenShareData = {
@@ -449,106 +455,53 @@ const ScreenShare = ({
         username: username
       };
       
-      // Add a small delay to allow any existing video player to cleanup properly
-      setTimeout(() => {
-        if (onScreenShare) {
-          onScreenShare(screenShareData);
-        }
-      }, 50);
+      if (onScreenShare) {
+        onScreenShare(screenShareData);
+      }
 
-      // Notify server about screen sharing (server will handle distribution)
-      console.log('📡 Emitting screen-share-started to server:', {
-        roomCode,
-        username,
-        socketId: socket.id
-      });
-      
+      // Notify server
       socket.emit('screen-share-started', {
         roomCode,
         username,
         socketId: socket.id
-        // Note: Don't send stream object to server (not serializable)
       });
 
-      // Start fallback frame relay as safety net
-      startFallbackFrames(stream);
-
-      // Handle stream end (when user stops sharing)
-      stream.getVideoTracks()[0].addEventListener('ended', () => {
+      // Handle stream stop (e.g., user clicks "Stop sharing" in browser UI)
+      stream.getVideoTracks()[0].onended = () => {
         handleStopScreenShare();
-      });
-
-      console.log('Screen sharing started successfully');
-    } catch (error) {
-      console.error('Error starting screen share:', error);
+      };
+    } catch (err) {
+      console.error('Error starting screen share:', err);
       setIsSharing(false);
-      setSharedStream(null);
     }
   };
 
   const startScreenShare = async () => {
-    if (!canShare) {
-      return;
-    }
-    // Directly trigger browser's native screen sharing dialog
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
-          mediaSource: 'screen',
-          width: { ideal: 1920, max: 1920 },
-          height: { ideal: 1080, max: 1080 },
-          frameRate: { ideal: 30, max: 60 }
+          cursor: "always"
         },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: false,
-          sampleRate: 48000,
-          channelCount: 2
-        }
+        audio: false
       });
-      
-      if (stream) {
-        // Process audio tracks to prevent feedback and improve quality
-        const audioTracks = stream.getAudioTracks();
-        audioTracks.forEach(track => {
-          // Apply audio constraints to reduce feedback and improve quality
-          track.applyConstraints({
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: false,
-            volume: 0.8 // Reduce volume to prevent distortion
-          }).catch(err => {
-            console.warn('Could not apply audio constraints:', err);
-          });
-        });
-        
-        handleStartScreenShare(stream);
-      }
-    } catch (error) {
-      console.error('Error starting screen share:', error);
-      // If user cancels or denies permission, don't show any error
-      if (error.name !== 'NotAllowedError' && error.name !== 'AbortError') {
-        alert('Failed to start screen sharing. Please try again.');
-      }
+      handleStartScreenShare(stream);
+    } catch (err) {
+      console.error("Error starting screen share:", err);
     }
   };
 
-  if (!showControls) {
-    return null;
-  }
+  if (!canShare && !isSharing) return null;
 
   return (
     <div className="screen-share-container">
-      {!isSharing ? (
-        <button className="share-screen-btn" onClick={startScreenShare} disabled={!canShare}>
-          <span className="btn-icon">🖥️</span>
-          Share Screen
+      {showControls && !isSharing && (
+        <button className="screen-share-btn" onClick={startScreenShare}>
+          🖥️ Share Screen
         </button>
-      ) : (
-        <button className="stop-share-btn-inline" onClick={handleStopScreenShare}>
-          <span className="btn-icon">🛑</span>
-          Stop Sharing
+      )}
+      {showControls && isSharing && (
+        <button className="screen-share-btn stop" onClick={handleStopScreenShare}>
+          🛑 Stop Sharing
         </button>
       )}
     </div>

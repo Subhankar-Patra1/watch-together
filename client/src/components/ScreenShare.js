@@ -482,7 +482,7 @@ const ScreenShare = ({
         video: {
           cursor: "always"
         },
-        audio: false
+        audio: true
       });
       handleStartScreenShare(stream);
     } catch (err) {

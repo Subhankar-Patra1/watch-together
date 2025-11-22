@@ -12,6 +12,39 @@ const ScreenSharePlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
     syncVideo: () => console.log('Screen share sync ignored - live stream')
   }));
 
+  // Video Watchdog: Monitor playback progress to detect frozen streams
+  useEffect(() => {
+    if (!videoData?.stream || !videoRef.current) return;
+
+    let lastTime = 0;
+    let sameTimeCount = 0;
+    const checkInterval = 1000; // Check every second
+    const maxFreezeTime = 3; // Trigger fallback after 3 seconds of freeze
+
+    const interval = setInterval(() => {
+      const video = videoRef.current;
+      if (!video || video.paused) return;
+
+      const currentTime = video.currentTime;
+      if (currentTime === lastTime) {
+        sameTimeCount++;
+        console.log(`Watchdog: Video frozen for ${sameTimeCount}s`);
+        if (sameTimeCount >= maxFreezeTime) {
+          console.warn('Watchdog: Video frozen too long, requesting fallback...');
+          if (onVideoAction) {
+            onVideoAction('fallback-request', { reason: 'video-frozen' });
+          }
+          sameTimeCount = 0; // Reset to avoid spamming
+        }
+      } else {
+        sameTimeCount = 0;
+        lastTime = currentTime;
+      }
+    }, checkInterval);
+
+    return () => clearInterval(interval);
+  }, [videoData, onVideoAction]);
+
   useEffect(() => {
     if (videoRef.current && videoData && videoData.stream) {
       const video = videoRef.current;

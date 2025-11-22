@@ -363,6 +363,20 @@ const RoomPage = ({
 
   const handleVideoAction = useCallback(
     (action, currentTime) => {
+      // Handle fallback request from video watchdog
+      if (action === 'fallback-request') {
+        console.warn('🚨 Fallback requested by watchdog:', currentTime);
+        // Clear the stream to force fallback mode
+        setVideo(prev => {
+          if (prev && prev.type === 'screen-share') {
+            return { ...prev, stream: null };
+          }
+          return prev;
+        });
+        return;
+      }
+      
+      // Normal video actions
       socket.emit("video-action", { action, currentTime });
     },
     [socket]

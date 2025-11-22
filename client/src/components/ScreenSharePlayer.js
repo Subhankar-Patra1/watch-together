@@ -105,7 +105,7 @@ const ScreenSharePlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
           ref={videoRef}
           autoPlay
           playsInline
-          muted={false}
+          muted={isMuted}
           controls={false}
           className="screen-share-video"
           onPlay={handlePlay}

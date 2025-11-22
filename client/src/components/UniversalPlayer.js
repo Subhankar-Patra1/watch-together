@@ -182,7 +182,7 @@ const UniversalPlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
 
   switch (videoType) {
     case "screen-share":
-      if (!videoData.stream) {
+      if (!videoData.stream && !videoData.fallbackFrame) {
         return (
           <div
             style={{

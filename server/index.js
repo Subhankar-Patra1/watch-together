@@ -1113,6 +1113,17 @@ io.on("connection", (socket) => {
     console.log(`🧊 SERVER: Forwarded ICE candidate to ${data.to}`);
   });
 
+  // Screen share fallback frame handling
+  socket.on("screen-share-frame", (data) => {
+    // Broadcast frame to all other users in the room
+    // We use volatile to avoid buffering if the network is slow
+    socket.to(data.roomCode).volatile.emit("screen-share-frame", {
+      frame: data.frame,
+      username: data.username,
+      timestamp: data.timestamp
+    });
+  });
+
   // Room-level screen sharing state management
   socket.on("room-screen-share-active", (data) => {
     console.log(`Room screen share ${data.isActive ? 'started' : 'stopped'} by ${data.username} in room ${data.roomCode}`);

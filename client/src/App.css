@@ -2968,3 +2968,314 @@ ctions Layout */
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
+
+/* ========================================
+   MOBILE RESPONSIVE STYLES
+   ======================================== */
+
+/* Tablet and Mobile Devices */
+@media (max-width: 768px) {
+  /* Video container - full width, optimized height */
+  .video-container {
+    width: 100% !important;
+    margin: 0.5rem 0 !important;
+    height: 300px !important;
+    min-height: 250px !important;
+    border-radius: 8px !important;
+  }
+  
+  /* Room layout - stack vertically */
+  .room-container {
+    flex-direction: column;
+  }
+  
+  /* Video section - top half */
+  .video-section {
+    height: 50vh;
+    width: 100%;
+  }
+  
+  /* Chat section - bottom half */
+  .chat-section {
+    width: 100% !important;
+    height: 50vh;
+    border-left: none;
+    border-top: 2px solid #667eea;
+  }
+  
+  /* Chat input - prevent iOS zoom, ensure visibility */
+  .chat-input {
+    font-size: 16px !important; /* Prevents iOS zoom on focus */
+    min-height: 60px;
+    padding: 10px 14px;
+  }
+  
+  /* Send button - touch-friendly */
+  .send-btn {
+    min-height: 44px;
+    padding: 10px 16px;
+  }
+  
+  /* Video controls - touch-friendly buttons */
+  .video-input button {
+    min-height: 44px;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+  }
+  
+  .video-buttons {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .video-buttons .share-screen-btn,
+  .video-buttons .stop-share-btn-inline {
+    min-height: 44px !important;
+    padding: 0.75rem 1rem !important;
+  }
+  
+  /* Header - compact layout */
+  .room-header {
+    padding: 0.5rem 1rem;
+    flex-wrap: wrap;
+  }
+  
+  .room-title-row {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .room-code {
+    font-size: 0.85rem;
+    padding: 0.3rem 0.6rem;
+  }
+  
+  /* Action buttons - touch-friendly */
+  .action-btn {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 1.1rem;
+  }
+  
+  /* Leave button - full width on mobile */
+  .leave-btn {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.85rem;
+  }
+  
+  /* Video call controls - larger touch targets */
+  .video-call-container .control-btn {
+    width: 50px;
+    height: 50px;
+    font-size: 1.2rem;
+  }
+  
+  .video-call-container .video-controls {
+    justify-content: center;
+    gap: 1rem;
+  }
+  
+  /* Emoji bar - scrollable on mobile */
+  .emoji-bar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.5rem;
+  }
+  
+  .emoji-btn {
+    min-width: 44px;
+    min-height: 44px;
+    flex-shrink: 0;
+  }
+  
+  /* Users list - compact */
+  .users-list {
+    padding: 0.5rem 0.75rem;
+  }
+  
+  .users-title {
+    font-size: 0.75rem;
+  }
+  
+  .user-item {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+  }
+  
+  /* Chat messages - optimized spacing */
+  .chat-messages {
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+  
+  .message {
+    padding: 0.5rem;
+  }
+  
+  .message-username {
+    font-size: 0.8rem;
+  }
+  
+  .message-content {
+    font-size: 0.85rem;
+  }
+  
+  /* Video grid - responsive */
+  .video-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    max-height: 300px;
+  }
+  
+  .video-item {
+    min-height: 150px;
+  }
+}
+
+/* Small Mobile Devices (phones in portrait) */
+@media (max-width: 480px) {
+  /* Video container - smaller on phones */
+  .video-container {
+    height: 250px !important;
+    min-height: 200px !important;
+    margin: 0.25rem 0 !important;
+  }
+  
+  /* Adjust split - more space for video */
+  .video-section {
+    height: 45vh;
+  }
+  
+  .chat-section {
+    height: 55vh;
+  }
+  
+  /* Header - even more compact */
+  .room-header {
+    padding: 0.4rem 0.75rem;
+  }
+  
+  .room-info h2 {
+    font-size: 0.95rem;
+  }
+  
+  .room-code {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+  }
+  
+  .user-count-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+  }
+  
+  /* Video controls - compact */
+  .video-controls {
+    padding: 0.5rem 0.75rem;
+    margin: 0 0.5rem 0.5rem 0.5rem;
+  }
+  
+  .video-input {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .video-input input {
+    width: 100%;
+  }
+  
+  .video-buttons {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .video-buttons button {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.75rem;
+    padding: 0.6rem 0.5rem !important;
+  }
+  
+  /* Chat input - optimized for small screens */
+  .chat-input-container {
+    padding: 0.5rem;
+  }
+  
+  .chat-input {
+    font-size: 16px !important;
+    padding: 8px 12px;
+  }
+  
+  .send-btn {
+    padding: 10px 14px;
+    min-width: 50px;
+    font-size: 0.85rem;
+  }
+  
+  /* Emoji bar - smaller emojis */
+  .emoji-btn {
+    font-size: 1.2rem;
+    min-width: 40px;
+    min-height: 40px;
+  }
+  
+  /* Landing page - mobile optimized */
+  .landing-title {
+    font-size: 1.75rem;
+  }
+  
+  .landing-subtitle {
+    font-size: 1rem;
+  }
+  
+  .landing-form {
+    padding: 1.5rem;
+  }
+}
+
+/* Landscape mode on mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+  .room-container {
+    flex-direction: row;
+  }
+  
+  .video-section {
+    width: 60%;
+    height: 100vh;
+  }
+  
+  .chat-section {
+    width: 40%;
+    height: 100vh;
+    border-left: 2px solid #667eea;
+    border-top: none;
+  }
+  
+  .video-container {
+    height: calc(100vh - 200px) !important;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+  /* Increase touch targets */
+  button, .action-btn, .control-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Remove hover effects on touch devices */
+  .action-btn:hover,
+  .video-input button:hover,
+  .send-btn:hover {
+    transform: none;
+  }
+  
+  /* Active states for touch feedback */
+  .action-btn:active,
+  .video-input button:active,
+  .send-btn:active {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+}

@@ -124,8 +124,23 @@ const ScreenShare = ({
 
     // Handle incoming stream
     pc.ontrack = (event) => {
-      console.log('🎥 Received screen share stream!');
+            console.log('🎥 Received screen share track!');
+      console.log('📊 Track details:', {
+        kind: event.track.kind,
+        id: event.track.id,
+        enabled: event.track.enabled,
+        muted: event.track.muted,
+        readyState: event.track.readyState
+      });
+      
       const stream = event.streams[0];
+      console.log('📺 Stream tracks:', stream.getTracks().map(t => ({
+        kind: t.kind,
+        id: t.id,
+        enabled: t.enabled,
+        readyState: t.readyState
+      })));
+      
       setRemoteStream(stream);
       
       // Show the actual screen share stream
@@ -214,9 +229,25 @@ const ScreenShare = ({
     const iceServers = await getIceServers();
     const pc = new RTCPeerConnection({ iceServers });
 
-    // Add screen share stream to connection
+    // Add all tracks (video + audio) with optimization
     stream.getTracks().forEach(track => {
-      pc.addTrack(track, stream);
+      const sender = pc.addTrack(track, stream);
+      
+      // Optimize video encoding for screen share
+      if (track.kind === 'video') {
+        const params = sender.getParameters();
+        if (!params.encodings) params.encodings = [{}];
+        
+        // Screen share optimizations
+        params.encodings[0].maxBitrate = 2500000; // 2.5 Mbps for smooth playback
+        params.encodings[0].maxFramerate = 30;
+        
+        sender.setParameters(params).catch(e => 
+          console.warn('Failed to set encoding params:', e)
+        );
+      }
+      
+      console.log(`📊 Added ${track.kind} track:`, track.id);
     });
 
     // Handle ICE candidates

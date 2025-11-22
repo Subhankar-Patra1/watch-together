@@ -143,6 +143,19 @@ const ScreenShare = ({
     pc.onconnectionstatechange = () => {
       console.log('📡 Receiver connection state:', pc.connectionState);
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        console.log('❌ WebRTC connection failed/disconnected. Switching to fallback frames.');
+        
+        // Clear the remote stream so fallback frames can take over
+        setRemoteStream(null);
+        if (onScreenShare) {
+          onScreenShare({
+            type: 'screen-share',
+            stream: null, // Explicitly set null to trigger fallback
+            username: activeShareUsername || 'Screen Share',
+            isRemote: true
+          });
+        }
+
         // Request fresh WebRTC after brief backoff
         setTimeout(() => {
           if (pc.connectionState !== 'connected') {

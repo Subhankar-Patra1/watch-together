@@ -84,6 +84,22 @@ const RoomPage = ({
           }
         };
 
+        // Connection diagnostics & auto-retry logic
+        pc.onconnectionstatechange = () => {
+          console.log('🌐 Global: Connection state:', pc.connectionState);
+          if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+            console.log('❌ Global: WebRTC connection failed/disconnected. Switching to fallback frames.');
+            
+            // Clear the remote stream so fallback frames can take over
+            setVideo(prev => {
+                if (prev && prev.type === 'screen-share') {
+                    return { ...prev, stream: null };
+                }
+                return prev;
+            });
+          }
+        };
+
         setGlobalPeerConnections(prev => new Map(prev.set(data.from, pc)));
 
         await pc.setRemoteDescription(data.offer);
@@ -98,30 +114,6 @@ const RoomPage = ({
         });
       } catch (error) {
         console.error('🌐 Global: Error handling screen share offer:', error);
-      }
-    };
-
-    const handleGlobalScreenShareAnswer = async (data) => {
-      console.log('🌐 Global: Received screen share answer from:', data.from);
-      try {
-        const pc = globalPeerConnections.get(data.from);
-        if (pc) {
-          await pc.setRemoteDescription(data.answer);
-        }
-      } catch (error) {
-        console.error('🌐 Global: Error handling screen share answer:', error);
-      }
-    };
-
-    const handleGlobalScreenShareIceCandidate = async (data) => {
-      console.log('🌐 Global: Received ICE candidate from:', data.from);
-      try {
-        const pc = globalPeerConnections.get(data.from);
-        if (pc) {
-          await pc.addIceCandidate(data.candidate);
-        }
-      } catch (error) {
-        console.error('🌐 Global: Error handling ICE candidate:', error);
       }
     };
 

@@ -141,7 +141,8 @@ const UniversalPlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
 
   // For screen share, check if it's remote or local
   if (videoData.type === 'screen-share') {
-    if (!videoData.stream && !videoData.socketId) {
+    // Allow rendering if we have a stream OR a fallback frame OR a socketId (for remote)
+    if (!videoData.stream && !videoData.socketId && !videoData.fallbackFrame) {
       return (
         <div
           style={{

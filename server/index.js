@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require("express");
 const http = require("http");
 const socketIo = require("socket.io");
@@ -57,12 +58,6 @@ app.use(express.json());
 
 // ICE/TURN config endpoint for WebRTC
 // Reads environment variables and returns an iceServers array for clients.
-// Supported env vars:
-// - TWILIO_ICE_SERVERS_JSON: full JSON string from a TURN provider (takes precedence)
-// - TURN_URLS: comma-separated list of turn/turns URIs (e.g. "turn:turn.example.com:3478,turns:turn.example.com:5349?transport=tcp")
-// - TURN_USERNAME
-// - TURN_CREDENTIAL
-// Always includes public STUN as a fallback.
 app.get("/api/ice-servers", (req, res) => {
   try {
     // Always include a STUN fallback

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getIceServers } from '../utils/iceConfig';
+import { ConnectionMonitor } from '../utils/connectionMonitor';
 import './ScreenShare.css';
 
 const ScreenShare = ({
@@ -20,6 +21,7 @@ const ScreenShare = ({
   const [remoteStream, setRemoteStream] = useState(null);
   const receiverConnectionsRef = useRef(new Map());
   const senderConnectionsRef = useRef(new Map());
+  const connectionMonitorsRef = useRef(new Map());
   const sharerNamesRef = useRef(new Map());
   const activeSharerSocketRef = useRef(activeShareSocketId);
   useEffect(() => { activeSharerSocketRef.current = activeShareSocketId; }, [activeShareSocketId]);
@@ -99,6 +101,10 @@ const ScreenShare = ({
     });
     senderConnectionsRef.current.clear();
 
+    // Stop all connection monitors
+    connectionMonitorsRef.current.forEach(monitor => monitor.stopMonitoring());
+    connectionMonitorsRef.current.clear();
+
     // Notify server that screen sharing stopped (server will broadcast to all)
     socket.emit('screen-share-stopped', {
       roomCode,
@@ -124,7 +130,7 @@ const ScreenShare = ({
 
     // Handle incoming stream
     pc.ontrack = (event) => {
-            console.log('🎥 Received screen share track!');
+      console.log('🎥 Received screen share track!');
       console.log('📊 Track details:', {
         kind: event.track.kind,
         id: event.track.id,
@@ -227,7 +233,44 @@ const ScreenShare = ({
   const createSenderConnection = useCallback(async (receiverSocketId, stream) => {
     console.log('📤 Creating WebRTC connection to send screen share to:', receiverSocketId);
     const iceServers = await getIceServers();
-    const pc = new RTCPeerConnection({ iceServers });
+    
+    // Production-grade WebRTC configuration
+    const pc = new RTCPeerConnection({ 
+      iceServers,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
+      iceTransportPolicy: 'all', // Ensure we use TURN if needed
+      iceCandidatePoolSize: 10   // Pre-gather candidates for faster connection
+    });
+
+    // Initialize connection monitor
+    const monitor = new ConnectionMonitor(pc);
+    connectionMonitorsRef.current.set(receiverSocketId, monitor);
+    
+    monitor.startMonitoring((stats) => {
+      // Adaptive bitrate logic
+      const senders = pc.getSenders();
+      const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+      
+      if (videoSender && stats.bitrate > 0) {
+        const params = videoSender.getParameters();
+        if (!params.encodings || !params.encodings[0]) return;
+
+        // Adjust quality based on available bandwidth
+        if (stats.bitrate < 500000) { // < 500 Kbps
+          params.encodings[0].maxBitrate = 500000;
+          params.encodings[0].scaleResolutionDownBy = 2;
+        } else if (stats.bitrate < 1500000) { // < 1.5 Mbps
+          params.encodings[0].maxBitrate = 1500000;
+          params.encodings[0].scaleResolutionDownBy = 1.5;
+        } else { // > 1.5 Mbps
+          params.encodings[0].maxBitrate = 2500000;
+          params.encodings[0].scaleResolutionDownBy = 1;
+        }
+
+        videoSender.setParameters(params).catch(e => {});
+      }
+    });
 
     // Add all tracks (video + audio) with optimization
     stream.getTracks().forEach(track => {
@@ -238,7 +281,7 @@ const ScreenShare = ({
         const params = sender.getParameters();
         if (!params.encodings) params.encodings = [{}];
         
-        // Screen share optimizations
+        // Initial Screen share optimizations
         params.encodings[0].maxBitrate = 2500000; // 2.5 Mbps for smooth playback
         params.encodings[0].maxFramerate = 30;
         

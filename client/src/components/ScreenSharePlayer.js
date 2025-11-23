@@ -56,9 +56,20 @@ const ScreenSharePlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
       video.volume = volume;
       video.muted = isMuted;
 
+      // Log tracks for debugging
+      const tracks = videoData.stream.getTracks();
+      console.log('📺 ScreenSharePlayer stream tracks:', tracks.map(t => ({ kind: t.kind, enabled: t.enabled, label: t.label, readyState: t.readyState })));
+      const audioTrack = videoData.stream.getAudioTracks()[0];
+      if (audioTrack) {
+        console.log('🔊 Audio track found:', audioTrack.label, 'Enabled:', audioTrack.enabled);
+      } else {
+        console.warn('🔇 No audio track in screen share stream');
+      }
+
       const tryPlay = async (muteFallback = true) => {
         try {
           await video.play();
+          console.log('▶️ Screen share playing');
           setTimeout(() => {
             if (!videoRef.current) return;
             videoRef.current.volume = volume;
@@ -66,6 +77,8 @@ const ScreenSharePlayer = forwardRef(({ videoData, onVideoAction }, ref) => {
           }, 100);
         } catch (err) {
           if (muteFallback && err.name === 'NotAllowedError') {
+            console.warn('⚠️ Autoplay blocked, falling back to muted');
+            setIsMuted(true); // Update state to reflect UI
             video.muted = true;
             video.play().catch(e => console.error('Play muted failed:', e));
           } else {

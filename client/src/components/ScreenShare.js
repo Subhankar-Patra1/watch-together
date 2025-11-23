@@ -558,6 +558,16 @@ const ScreenShare = ({
         },
         audio: true
       });
+
+      // Log captured tracks
+      console.log('🖥️ Captured screen share stream tracks:', stream.getTracks().map(t => ({ kind: t.kind, label: t.label, enabled: t.enabled })));
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        console.log('🔊 Captured audio track:', audioTrack.label);
+      } else {
+        console.warn('🔇 No audio track captured! User might not have shared audio.');
+      }
+
       handleStartScreenShare(stream);
     } catch (err) {
       console.error("Error starting screen share:", err);

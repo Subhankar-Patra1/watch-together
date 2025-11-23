@@ -64,11 +64,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile */
   overflow: hidden;
 }
 
 .App {
   height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile */
   overflow: hidden;
 }
 
@@ -215,6 +217,7 @@ body {
 .room-container {
   display: flex;
   height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile */
   background: #1a1a1a;
   overflow: hidden;
 }
@@ -224,6 +227,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile */
   overflow: hidden;
 }
 
@@ -710,6 +714,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile */
   border-left: 2px solid #667eea;
   position: relative;
   overflow: hidden;
@@ -2992,13 +2997,16 @@ ctions Layout */
   /* Video section - top half */
   .video-section {
     height: 50vh;
+    height: 50dvh; /* Dynamic viewport height */
     width: 100%;
+    overflow-y: auto;
   }
   
   /* Chat section - bottom half */
   .chat-section {
     width: 100% !important;
     height: 50vh;
+    height: 50dvh; /* Dynamic viewport height */
     border-left: none;
     border-top: 2px solid #667eea;
   }
@@ -3144,10 +3152,12 @@ ctions Layout */
   /* Adjust split - more space for video */
   .video-section {
     height: 45vh;
+    height: 45dvh; /* Dynamic viewport height */
   }
   
   .chat-section {
     height: 55vh;
+    height: 55dvh; /* Dynamic viewport height */
   }
   
   /* Header - even more compact */
@@ -3242,17 +3252,20 @@ ctions Layout */
   .video-section {
     width: 60%;
     height: 100vh;
+    height: 100dvh; /* Dynamic viewport height */
   }
   
   .chat-section {
     width: 40%;
     height: 100vh;
+    height: 100dvh; /* Dynamic viewport height */
     border-left: 2px solid #667eea;
     border-top: none;
   }
   
   .video-container {
     height: calc(100vh - 200px) !important;
+    height: calc(100dvh - 200px) !important; /* Dynamic viewport height */
   }
 }
 
